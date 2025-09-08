@@ -1,6 +1,6 @@
 import React from 'react';
 import { useGameStore } from '../store/gameStore';
-import { BarChart3, Clock } from 'lucide-react';
+import { BarChart3 } from 'lucide-react';
 
 export const GameStats: React.FC = () => {
   const { 
@@ -9,7 +9,6 @@ export const GameStats: React.FC = () => {
     currentUser, 
     canvasSize, 
     pixelSize,
-    cooldownTime,
     maxPixelsPerUser 
   } = useGameStore();
 
@@ -19,9 +18,6 @@ export const GameStats: React.FC = () => {
   const pixelsUsed = canvasSize.width * canvasSize.height;
   const usagePercentage = (totalPixels / pixelsUsed) * 100;
 
-  const cooldownRemaining = currentUserData && currentUserData.cooldownEnds > Date.now()
-    ? Math.ceil((currentUserData.cooldownEnds - Date.now()) / 1000)
-    : 0;
 
   const pixelsRemaining = currentUserData 
     ? Math.max(0, maxPixelsPerUser - currentUserData.pixelsPlaced)
@@ -95,36 +91,11 @@ export const GameStats: React.FC = () => {
           </div>
         )}
 
-        {/* Cooldown */}
-        {cooldownRemaining > 0 && (
-          <div className="space-y-2">
-            <div className="flex items-center gap-2">
-              <Clock className="w-3 h-3 text-pixel-warning" />
-              <span className="font-pixel text-xs text-pixel-warning">
-                Cooldown: {cooldownRemaining}s
-              </span>
-            </div>
-            <div className="w-full bg-pixel-border h-2">
-              <div 
-                className="bg-pixel-warning h-full transition-all duration-1000"
-                style={{ 
-                  width: `${((cooldownTime - (currentUserData?.cooldownEnds || 0) + Date.now()) / cooldownTime) * 100}%` 
-                }}
-              />
-            </div>
-          </div>
-        )}
 
         {/* Game Settings */}
         <div className="space-y-2">
           <h4 className="font-pixel text-xs text-pixel-accent">Settings</h4>
           <div className="grid grid-cols-2 gap-2 text-xs">
-            <div className="flex justify-between">
-              <span className="text-pixel-text">Cooldown:</span>
-              <span className="text-pixel-text font-mono">
-                {cooldownTime / 1000}s
-              </span>
-            </div>
             <div className="flex justify-between">
               <span className="text-pixel-text">Max/User:</span>
               <span className="text-pixel-text font-mono">

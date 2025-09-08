@@ -10,7 +10,6 @@ export const GAME_CONFIG = {
   MIN_CANVAS_HEIGHT: 20,
   
   // User settings
-  DEFAULT_COOLDOWN_TIME: 1000, // 1 second
   DEFAULT_MAX_PIXELS_PER_USER: 1000,
   MAX_USERNAME_LENGTH: 20,
   MIN_USERNAME_LENGTH: 2,
@@ -89,7 +88,6 @@ export const ERROR_MESSAGES = {
   USERNAME_TAKEN: 'Username is already taken',
   INVALID_USERNAME: 'Invalid username',
   PIXEL_LIMIT_REACHED: 'Pixel limit reached',
-  COOLDOWN_ACTIVE: 'Cooldown is still active',
   CANVAS_FULL: 'Canvas is full',
   UNAUTHORIZED: 'Unauthorized access',
   SERVER_ERROR: 'Server error occurred',

@@ -16,7 +16,6 @@ interface GameStore extends GameState {
   initializeCanvas: (width: number, height: number) => void;
   setCanvasSize: (width: number, height: number) => void;
   setPixelSize: (size: number) => void;
-  setCooldownTime: (time: number) => void;
   setMaxPixelsPerUser: (max: number) => void;
   setCanvas: (canvas: Pixel[][]) => void;
   reset: () => void;
@@ -24,7 +23,6 @@ interface GameStore extends GameState {
 
 const defaultCanvasSize = { width: 100, height: 100 };
 const defaultPixelSize = 8;
-const defaultCooldownTime = 1000; // 1 second
 const defaultMaxPixelsPerUser = 1000;
 
 const createEmptyCanvas = (width: number, height: number): Pixel[][] => {
@@ -49,7 +47,6 @@ export const useGameStore = create<GameStore>((set, get) => ({
   isConnected: false,
   canvasSize: defaultCanvasSize,
   pixelSize: defaultPixelSize,
-  cooldownTime: defaultCooldownTime,
   maxPixelsPerUser: defaultMaxPixelsPerUser,
 
   // Actions
@@ -142,7 +139,6 @@ export const useGameStore = create<GameStore>((set, get) => ({
   
   setPixelSize: (size) => set({ pixelSize: size }),
   
-  setCooldownTime: (time) => set({ cooldownTime: time }),
   
   setMaxPixelsPerUser: (max) => set({ maxPixelsPerUser: max }),
   
@@ -157,7 +153,6 @@ export const useGameStore = create<GameStore>((set, get) => ({
     isConnected: false,
     canvasSize: defaultCanvasSize,
     pixelSize: defaultPixelSize,
-    cooldownTime: defaultCooldownTime,
     maxPixelsPerUser: defaultMaxPixelsPerUser,
   })
 }));

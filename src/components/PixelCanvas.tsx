@@ -18,14 +18,12 @@ export const PixelCanvas: React.FC<PixelCanvasProps> = ({ className = '' }) => {
     selectedTool,
     pixelSize,
     currentUser,
-    cooldownTime,
     maxPixelsPerUser,
     users
   } = useGameStore();
 
   const currentUserData = currentUser ? users.find(u => u.id === currentUser.id) : null;
   const canPlacePixel = currentUserData && 
-    Date.now() > currentUserData.cooldownEnds && 
     currentUserData.pixelsPlaced < maxPixelsPerUser;
 
   // Memoize canvas size calculation for performance
@@ -133,15 +131,14 @@ export const PixelCanvas: React.FC<PixelCanvasProps> = ({ className = '' }) => {
         console.error('Failed to place pixel:', error);
       });
 
-      // Update user cooldown and pixel count
+      // Update user pixel count
       const updatedUser = {
         ...currentUserData!,
-        cooldownEnds: Date.now() + cooldownTime,
         pixelsPlaced: currentUserData!.pixelsPlaced + 1
       };
       useGameStore.getState().updateUser(currentUser.id, updatedUser);
     }, 16), // ~60fps throttling
-    [canPlacePixel, currentUser, selectedColor, selectedTool, currentUserData, cooldownTime]
+    [canPlacePixel, currentUser, selectedColor, selectedTool, currentUserData]
   );
 
   const handlePixelPlace = (x: number, y: number) => {
@@ -247,16 +244,8 @@ export const PixelCanvas: React.FC<PixelCanvasProps> = ({ className = '' }) => {
         <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center z-10">
           <div className="pixel-card text-center">
             <p className="text-pixel-warning font-pixel">
-              {currentUserData && currentUserData.pixelsPlaced >= maxPixelsPerUser
-                ? 'Pixel limit reached!'
-                : 'Cooldown active...'
-              }
+              Pixel limit reached!
             </p>
-            {currentUserData && currentUserData.cooldownEnds > Date.now() && (
-              <p className="text-sm text-pixel-text mt-2">
-                {Math.ceil((currentUserData.cooldownEnds - Date.now()) / 1000)}s remaining
-              </p>
-            )}
           </div>
         </div>
       )}

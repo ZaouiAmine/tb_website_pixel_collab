@@ -56,9 +56,6 @@ export const UserList: React.FC = () => {
               </div>
               <div className="flex items-center gap-1">
                 {getStatusIcon(user)}
-                {user.cooldownEnds > Date.now() && (
-                  <div className="w-2 h-2 bg-pixel-warning rounded-full animate-pulse" />
-                )}
               </div>
             </div>
           ))

@@ -164,9 +164,6 @@ export const validatePixelSize = (size: number): boolean => {
   return size >= 1 && size <= 50;
 };
 
-export const validateCooldownTime = (time: number): boolean => {
-  return time >= 0 && time <= 60000; // 0 to 60 seconds
-};
 
 export const validateMaxPixelsPerUser = (max: number): boolean => {
   return max >= 1 && max <= 10000;

@@ -13,7 +13,6 @@ export interface User {
   isOnline: boolean;
   lastSeen: number;
   pixelsPlaced: number;
-  cooldownEnds: number;
 }
 
 export interface GameState {
@@ -25,7 +24,6 @@ export interface GameState {
   isConnected: boolean;
   canvasSize: { width: number; height: number };
   pixelSize: number;
-  cooldownTime: number;
   maxPixelsPerUser: number;
 }
 
@@ -44,7 +42,6 @@ export interface GameSettings {
   canvasWidth: number;
   canvasHeight: number;
   pixelSize: number;
-  cooldownTime: number;
   maxPixelsPerUser: number;
   maxUsers: number;
 }

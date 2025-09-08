@@ -109,7 +109,6 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose }) => {
             <li>• Real-time pixel collaboration</li>
             <li>• Multiple drawing tools</li>
             <li>• Chat with other players</li>
-            <li>• Pixel cooldown system</li>
             <li>• User statistics</li>
           </ul>
         </div>
