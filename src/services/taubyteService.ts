@@ -29,6 +29,7 @@ class TaubyteService {
   private eventListeners: Map<string, Function[]> = new Map();
   private websocket: WebSocket | null = null;
   private useWebSocket = true; // Toggle between polling and WebSocket
+  private websocketAttempted = false; // Track if we've already attempted WebSocket
   private lastMessageTimestamp = 0; // Track last message timestamp to avoid duplicates
   private pingInterval: NodeJS.Timeout | null = null;
 
@@ -456,19 +457,31 @@ class TaubyteService {
 
   // WebSocket connection methods
   private async connectWebSocket(): Promise<void> {
+    // If we've already attempted WebSocket and it failed, don't try again
+    if (this.websocketAttempted) {
+      throw new Error('WebSocket already attempted, using polling');
+    }
+    
+    this.websocketAttempted = true;
+    
     try {
-      // Get WebSocket URL from backend
+      // Get room information from backend
       const response = await this.makeRequest(`${TAUBYTE_CONFIG.API_ENDPOINTS.GET_WEBSOCKET_URL}?room=pixelcollab`);
       const data = await response.json();
       
-      if (!data.websocket_url) {
-        throw new Error('No WebSocket URL received from server');
+      if (!data.room) {
+        throw new Error('No room information received from server');
       }
 
-      console.log('Connecting to WebSocket:', data.websocket_url);
+      // Construct WebSocket URL using current origin and room
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const host = window.location.host;
+      const websocketURL = `${protocol}//${host}/websocket/${data.room}`;
+
+      console.log('Connecting to WebSocket:', websocketURL);
       
-      // Connect to WebSocket using the Taubyte-provided URL
-      this.websocket = new WebSocket(data.websocket_url);
+      // Connect to WebSocket using constructed URL
+      this.websocket = new WebSocket(websocketURL);
       
       this.websocket.onopen = () => {
         console.log('WebSocket connected successfully');
@@ -511,9 +524,9 @@ class TaubyteService {
       };
 
     } catch (error) {
-      console.error('Failed to connect WebSocket:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      console.log('WebSocket not available, using polling mode:', errorMessage);
       // Fallback to polling if WebSocket fails
-      console.log('Falling back to polling mode');
       this.useWebSocket = false;
       this.startPolling();
       // Still emit connect event since we're connected via polling
