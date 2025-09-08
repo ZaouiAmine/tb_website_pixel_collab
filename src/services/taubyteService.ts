@@ -428,18 +428,40 @@ class TaubyteService {
     await this.publishToChannel('pixelupdates', pixel);
   }
 
-  // Helper method to publish to pub/sub channel
+  // Helper method to publish to pub/sub channel via WebSocket
   private async publishToChannel(channel: string, data: any): Promise<void> {
-    // Use fetch to send to pub/sub endpoint
-    const response = await fetch(`${TAUBYTE_CONFIG.BASE_URL}/pubsub/${channel}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data)
-    });
-
-    if (!response.ok) {
-      throw new Error(`Failed to publish to channel: ${response.statusText}`);
+    // Get WebSocket URL from backend
+    const response = await this.makeRequest(`${TAUBYTE_CONFIG.API_ENDPOINTS.GET_WEBSOCKET_URL}?room=${channel}`);
+    const wsData = await response.json();
+    
+    if (!wsData.websocket_url) {
+      throw new Error('No WebSocket URL received from server');
     }
+
+    // Construct full WebSocket URL
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const host = window.location.host;
+    const fullWebSocketURL = `${protocol}//${host}/${wsData.websocket_url}`;
+
+    // Create temporary WebSocket connection to publish message
+    return new Promise((resolve, reject) => {
+      const ws = new WebSocket(fullWebSocketURL);
+      
+      ws.onopen = () => {
+        // Send the data
+        ws.send(JSON.stringify(data));
+        ws.close();
+        resolve();
+      };
+      
+      ws.onerror = (error) => {
+        reject(new Error(`WebSocket error: ${error}`));
+      };
+      
+      ws.onclose = () => {
+        // Connection closed, message sent
+      };
+    });
   }
 
   async initializeCanvas(): Promise<void> {
