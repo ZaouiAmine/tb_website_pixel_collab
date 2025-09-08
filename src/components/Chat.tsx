@@ -2,15 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useGameStore } from '../store/gameStore';
 import { taubyteService } from '../services/taubyteService';
 import { MessageCircle, Send } from 'lucide-react';
-
-interface ChatMessage {
-  id: string;
-  userId: string;
-  username: string;
-  message: string;
-  timestamp: number;
-  type: 'user' | 'system';
-}
+import type { ChatMessage } from '../types/game';
 
 export const Chat: React.FC = () => {
   const { currentUser } = useGameStore();
@@ -31,11 +23,13 @@ export const Chat: React.FC = () => {
   useEffect(() => {
     const handleChatMessage = (message: ChatMessage) => {
       setMessages(prev => {
-        // Avoid duplicates
+        // Avoid duplicates by checking message ID
         if (prev.find(m => m.id === message.id)) {
           return prev;
         }
-        return [...prev, message];
+        // Sort messages by timestamp to maintain chronological order
+        const newMessages = [...prev, message].sort((a, b) => a.timestamp - b.timestamp);
+        return newMessages;
       });
     };
 
@@ -45,7 +39,9 @@ export const Chat: React.FC = () => {
         const response = await fetch(`${import.meta.env.VITE_TAUBYTE_URL || window.location.origin}/api/getMessages`);
         const data = await response.json();
         if (data.messages) {
-          setMessages(data.messages);
+          // Sort messages by timestamp to maintain chronological order
+          const sortedMessages = data.messages.sort((a: ChatMessage, b: ChatMessage) => a.timestamp - b.timestamp);
+          setMessages(sortedMessages);
         }
       } catch (error) {
         console.error('Failed to load messages:', error);
@@ -64,16 +60,7 @@ export const Chat: React.FC = () => {
     e.preventDefault();
     if (!newMessage.trim() || !currentUser) return;
 
-    const message: ChatMessage = {
-      id: Date.now().toString(),
-      userId: currentUser.id,
-      username: currentUser.username,
-      message: newMessage.trim(),
-      timestamp: Date.now(),
-      type: 'user'
-    };
-
-    setMessages(prev => [...prev, message]);
+    // Send message to server - it will be added to chat via polling
     taubyteService.sendChatMessage(newMessage.trim()).catch(error => {
       console.error('Failed to send message:', error);
     });
