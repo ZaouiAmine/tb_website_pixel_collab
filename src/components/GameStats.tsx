@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useGameStore } from '../store/gameStore';
-import { BarChart3 } from 'lucide-react';
+import { taubyteService } from '../services/taubyteService';
+import { BarChart3, Wifi, WifiOff } from 'lucide-react';
 
 export const GameStats: React.FC = () => {
   const { 
@@ -12,7 +13,27 @@ export const GameStats: React.FC = () => {
     maxPixelsPerUser 
   } = useGameStore();
 
+  const [connectionStatus, setConnectionStatus] = useState(taubyteService.getConnectionStatus());
   const currentUserData = currentUser ? users.find(u => u.id === currentUser.id) : null;
+
+  useEffect(() => {
+    const updateConnectionStatus = () => {
+      setConnectionStatus(taubyteService.getConnectionStatus());
+    };
+
+    // Update connection status every 5 seconds
+    const interval = setInterval(updateConnectionStatus, 5000);
+    
+    // Also listen to connection events
+    taubyteService.on('connect', updateConnectionStatus);
+    taubyteService.on('disconnect', updateConnectionStatus);
+
+    return () => {
+      clearInterval(interval);
+      taubyteService.off('connect', updateConnectionStatus);
+      taubyteService.off('disconnect', updateConnectionStatus);
+    };
+  }, []);
   
   const totalPixels = canvas.flat().filter(pixel => pixel.userId).length;
   const pixelsUsed = canvasSize.width * canvasSize.height;
@@ -31,6 +52,30 @@ export const GameStats: React.FC = () => {
       </div>
 
       <div className="space-y-3">
+        {/* Connection Status */}
+        <div className="space-y-2">
+          <h4 className="font-pixel text-xs text-pixel-accent">Connection</h4>
+          <div className="flex items-center justify-between text-xs">
+            <div className="flex items-center gap-2">
+              {connectionStatus.connected ? (
+                <Wifi className="w-3 h-3 text-green-500" />
+              ) : (
+                <WifiOff className="w-3 h-3 text-red-500" />
+              )}
+              <span className="text-pixel-text">
+                {connectionStatus.connected ? 'Connected' : 'Disconnected'}
+              </span>
+            </div>
+            <span className={`text-xs px-2 py-1 rounded ${
+              connectionStatus.mode === 'websocket' 
+                ? 'bg-green-100 text-green-800' 
+                : 'bg-yellow-100 text-yellow-800'
+            }`}>
+              {connectionStatus.mode === 'websocket' ? 'WebSocket' : 'Polling'}
+            </span>
+          </div>
+        </div>
+
         {/* Canvas Stats */}
         <div className="space-y-2">
           <h4 className="font-pixel text-xs text-pixel-accent">Canvas</h4>

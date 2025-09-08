@@ -28,8 +28,9 @@ class TaubyteService {
   private retryCount = 0;
   private eventListeners: Map<string, Function[]> = new Map();
   private websocket: WebSocket | null = null;
-  private useWebSocket = false; // Toggle between polling and WebSocket
+  private useWebSocket = true; // Toggle between polling and WebSocket
   private lastMessageTimestamp = 0; // Track last message timestamp to avoid duplicates
+  private pingInterval: NodeJS.Timeout | null = null;
 
   constructor() {
     this.setupEventListeners();
@@ -464,28 +465,42 @@ class TaubyteService {
         throw new Error('No WebSocket URL received from server');
       }
 
+      console.log('Connecting to WebSocket:', data.websocket_url);
+      
       // Connect to WebSocket using the Taubyte-provided URL
       this.websocket = new WebSocket(data.websocket_url);
       
       this.websocket.onopen = () => {
-        console.log('WebSocket connected');
+        console.log('WebSocket connected successfully');
         this.emit('connect');
+        
+        // Subscribe to channels
+        const subscribeMsg = {
+          type: 'subscribe',
+          channels: data.channels || ['pixelupdates', 'userupdates', 'chatmessages']
+        };
+        this.websocket?.send(JSON.stringify(subscribeMsg));
+        
+        // Start ping interval to keep connection alive
+        this.startPingInterval();
       };
 
       this.websocket.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
+          console.log('WebSocket message received:', data);
           this.handleWebSocketMessage(data);
         } catch (error) {
           console.error('Error parsing WebSocket message:', error);
         }
       };
 
-      this.websocket.onclose = () => {
-        console.log('WebSocket disconnected');
+      this.websocket.onclose = (event) => {
+        console.log('WebSocket disconnected:', event.code, event.reason);
         this.emit('disconnect');
-        // Attempt to reconnect
+        // Attempt to reconnect after a delay
         if (this.isConnected) {
+          console.log('Attempting to reconnect WebSocket in 3 seconds...');
           setTimeout(() => this.connectWebSocket(), 3000);
         }
       };
@@ -497,25 +512,53 @@ class TaubyteService {
 
     } catch (error) {
       console.error('Failed to connect WebSocket:', error);
-      throw error;
+      // Fallback to polling if WebSocket fails
+      console.log('Falling back to polling mode');
+      this.useWebSocket = false;
+      this.startPolling();
+      // Still emit connect event since we're connected via polling
+      this.emit('connect');
     }
   }
 
   private disconnectWebSocket(): void {
+    this.stopPingInterval();
     if (this.websocket) {
       this.websocket.close();
       this.websocket = null;
     }
   }
 
+  private startPingInterval(): void {
+    this.stopPingInterval();
+    // Send ping every 30 seconds to keep connection alive
+    this.pingInterval = setInterval(() => {
+      this.sendPing();
+    }, 30000);
+  }
+
+  private stopPingInterval(): void {
+    if (this.pingInterval) {
+      clearInterval(this.pingInterval);
+      this.pingInterval = null;
+    }
+  }
+
   private handleWebSocketMessage(data: any): void {
     // Handle different types of real-time updates
     switch (data.type) {
+      case 'connection':
+        console.log('WebSocket connection established:', data.message);
+        break;
+        
       case 'pixelUpdate':
+        console.log('Pixel update received via WebSocket:', data.payload);
         this.emit('pixelUpdate', data.payload);
         this.gameStore.updatePixel(data.payload.x, data.payload.y, data.payload.color, data.payload.userId);
         break;
+        
       case 'userUpdate':
+        console.log('User update received via WebSocket:', data.payload);
         this.emit('userUpdate', data.payload);
         if (data.payload.isOnline) {
           this.gameStore.addUser(data.payload);
@@ -523,36 +566,69 @@ class TaubyteService {
           this.gameStore.removeUser(data.payload.id);
         }
         break;
+        
       case 'chatMessage':
+        console.log('Chat message received via WebSocket:', data.payload);
         this.emit('chatMessage', data.payload);
         this.gameStore.addChatMessage(data.payload);
         break;
+        
+      case 'pong':
+        console.log('WebSocket pong received');
+        break;
+        
       default:
-        console.log('Unknown WebSocket message type:', data.type);
+        console.log('Unknown WebSocket message type:', data.type, data);
     }
   }
 
   // Method to enable WebSocket mode
   enableWebSocket(): void {
+    if (this.useWebSocket) return;
+    
     this.useWebSocket = true;
+    this.stopPolling();
+    
+    if (this.isConnected) {
+      this.connectWebSocket();
+    }
   }
 
   // Method to disable WebSocket mode (use polling)
   disableWebSocket(): void {
+    if (!this.useWebSocket) return;
+    
     this.useWebSocket = false;
+    this.disconnectWebSocket();
+    
+    if (this.isConnected) {
+      this.startPolling();
+    }
   }
 
   // Method to get connection status
-  getConnectionStatus(): { connected: boolean; mode: 'websocket' | 'polling' } {
+  getConnectionStatus(): { connected: boolean; mode: 'websocket' | 'polling'; websocketState?: number } {
     return {
       connected: this.isConnected,
-      mode: this.useWebSocket ? 'websocket' : 'polling'
+      mode: this.useWebSocket ? 'websocket' : 'polling',
+      websocketState: this.websocket?.readyState
     };
   }
 
   // Method to reset message timestamp (useful for reconnections)
   resetMessageTimestamp(): void {
     this.lastMessageTimestamp = 0;
+  }
+
+  // Method to send ping to WebSocket (keep connection alive)
+  private sendPing(): void {
+    if (this.websocket && this.websocket.readyState === WebSocket.OPEN) {
+      const pingMsg = {
+        type: 'ping',
+        timestamp: Date.now()
+      };
+      this.websocket.send(JSON.stringify(pingMsg));
+    }
   }
 
   // Cleanup
