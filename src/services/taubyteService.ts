@@ -397,72 +397,26 @@ class TaubyteService {
       throw new Error('Not connected or user not logged in');
     }
 
-    const chatMessage = {
-      id: `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-      userId: this.currentUser.id,
-      username: this.currentUser.username,
-      message: message,
-      timestamp: Date.now(),
-      type: 'user'
-    };
-
-    // Publish directly to chatmessages channel for real-time interaction
-    await this.publishToChannel('chatmessages', chatMessage);
+    // Use the backend API to send the message
+    await this.makeRequest(TAUBYTE_CONFIG.API_ENDPOINTS.SEND_MESSAGE, {
+      method: 'POST',
+      body: JSON.stringify({ message }),
+    });
   }
 
-  // Send pixel update via pub/sub for real-time interaction
+  // Send pixel update via backend API
   async sendPixelUpdate(x: number, y: number, color: string): Promise<void> {
     if (!this.currentUser) {
       throw new Error('User not logged in');
     }
 
-    const pixel = {
-      x: x,
-      y: y,
-      color: color,
-      userId: this.currentUser.id,
-      timestamp: Date.now()
-    };
-
-    // Publish directly to pixelupdates channel for real-time interaction
-    await this.publishToChannel('pixelupdates', pixel);
-  }
-
-  // Helper method to publish to pub/sub channel via WebSocket
-  private async publishToChannel(channel: string, data: any): Promise<void> {
-    // Get WebSocket URL from backend
-    const response = await this.makeRequest(`${TAUBYTE_CONFIG.API_ENDPOINTS.GET_WEBSOCKET_URL}?room=${channel}`);
-    const wsData = await response.json();
-    
-    if (!wsData.websocket_url) {
-      throw new Error('No WebSocket URL received from server');
-    }
-
-    // Construct full WebSocket URL
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const host = window.location.host;
-    const fullWebSocketURL = `${protocol}//${host}/${wsData.websocket_url}`;
-
-    // Create temporary WebSocket connection to publish message
-    return new Promise((resolve, reject) => {
-      const ws = new WebSocket(fullWebSocketURL);
-      
-      ws.onopen = () => {
-        // Send the data
-        ws.send(JSON.stringify(data));
-        ws.close();
-        resolve();
-      };
-      
-      ws.onerror = (error) => {
-        reject(new Error(`WebSocket error: ${error}`));
-      };
-      
-      ws.onclose = () => {
-        // Connection closed, message sent
-      };
+    // Use the backend API to place the pixel
+    await this.makeRequest(TAUBYTE_CONFIG.API_ENDPOINTS.PLACE_PIXEL, {
+      method: 'POST',
+      body: JSON.stringify({ x, y, color }),
     });
   }
+
 
   async initializeCanvas(): Promise<void> {
     try {
