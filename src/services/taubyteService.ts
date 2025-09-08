@@ -28,7 +28,7 @@ class TaubyteService {
   private retryCount = 0;
   private eventListeners: Map<string, Function[]> = new Map();
   private websocket: WebSocket | null = null;
-  private useWebSocket = true; // Toggle between polling and WebSocket
+  private useWebSocket = false; // Use pub/sub instead of WebSocket
   private websocketAttempted = false; // Track if we've already attempted WebSocket
   private lastMessageTimestamp = 0; // Track last message timestamp to avoid duplicates
   private pingInterval: NodeJS.Timeout | null = null;
@@ -401,14 +401,48 @@ class TaubyteService {
       throw new Error('Not connected or user not logged in');
     }
 
-    try {
-      await this.makeRequest(TAUBYTE_CONFIG.API_ENDPOINTS.SEND_MESSAGE, {
-        method: 'POST',
-        body: JSON.stringify({ message }),
-      });
-    } catch (error) {
-      console.error('Error sending message:', error);
-      throw error;
+    const chatMessage = {
+      id: `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      userId: this.currentUser.id,
+      username: this.currentUser.username,
+      message: message,
+      timestamp: Date.now(),
+      type: 'user'
+    };
+
+    // Send via chatmessages channel
+    await this.publishToChannel('chatmessages', chatMessage);
+  }
+
+  // Send pixel update via pub/sub
+  async sendPixelUpdate(x: number, y: number, color: string): Promise<void> {
+    if (!this.currentUser) {
+      throw new Error('User not logged in');
+    }
+
+    const pixel = {
+      x: x,
+      y: y,
+      color: color,
+      userId: this.currentUser.id,
+      timestamp: Date.now()
+    };
+
+    // Send via pixelupdates channel
+    await this.publishToChannel('pixelupdates', pixel);
+  }
+
+  // Helper method to publish to pub/sub channel
+  private async publishToChannel(channel: string, data: any): Promise<void> {
+    // Use fetch to send to pub/sub endpoint
+    const response = await fetch(`${TAUBYTE_CONFIG.BASE_URL}/pubsub/${channel}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to publish to channel: ${response.statusText}`);
     }
   }
 
@@ -465,23 +499,23 @@ class TaubyteService {
     this.websocketAttempted = true;
     
     try {
-      // Get room information from backend
+      // Get Taubyte WebSocket URL from backend
       const response = await this.makeRequest(`${TAUBYTE_CONFIG.API_ENDPOINTS.GET_WEBSOCKET_URL}?room=pixelcollab`);
       const data = await response.json();
       
-      if (!data.room) {
-        throw new Error('No room information received from server');
+      if (!data.websocket_url) {
+        throw new Error('No WebSocket URL received from server');
       }
 
-      // Construct WebSocket URL using current origin and room
+      // Construct full Taubyte WebSocket URL
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
       const host = window.location.host;
-      const websocketURL = `${protocol}//${host}/websocket/${data.room}`;
+      const fullWebSocketURL = `${protocol}//${host}/${data.websocket_url}`;
 
-      console.log('Connecting to WebSocket:', websocketURL);
+      console.log('Connecting to Taubyte WebSocket:', fullWebSocketURL);
       
-      // Connect to WebSocket using constructed URL
-      this.websocket = new WebSocket(websocketURL);
+      // Connect to WebSocket using Taubyte WebSocket URL
+      this.websocket = new WebSocket(fullWebSocketURL);
       
       this.websocket.onopen = () => {
         console.log('WebSocket connected successfully');
@@ -511,10 +545,14 @@ class TaubyteService {
       this.websocket.onclose = (event) => {
         console.log('WebSocket disconnected:', event.code, event.reason);
         this.emit('disconnect');
-        // Attempt to reconnect after a delay
-        if (this.isConnected) {
+        // Don't attempt to reconnect if WebSocket is not available
+        if (this.isConnected && !this.websocketAttempted) {
           console.log('Attempting to reconnect WebSocket in 3 seconds...');
           setTimeout(() => this.connectWebSocket(), 3000);
+        } else {
+          console.log('WebSocket not available, switching to polling mode');
+          this.useWebSocket = false;
+          this.startPolling();
         }
       };
 
@@ -600,6 +638,7 @@ class TaubyteService {
     if (this.useWebSocket) return;
     
     this.useWebSocket = true;
+    this.websocketAttempted = false; // Reset attempt flag
     this.stopPolling();
     
     if (this.isConnected) {
