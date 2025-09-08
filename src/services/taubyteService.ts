@@ -296,27 +296,23 @@ class TaubyteService {
     }, delay);
   }
 
-  // Game actions
+  // Game actions - use pub/sub for real-time pixel placement
   async placePixel(x: number, y: number, color: string): Promise<void> {
     if (!this.isConnected || !this.currentUser) {
       throw new Error('Not connected or user not logged in');
     }
 
     try {
-      const response = await this.makeRequest(TAUBYTE_CONFIG.API_ENDPOINTS.PLACE_PIXEL, {
-        method: 'POST',
-        body: JSON.stringify({ x, y, color }),
+      // Use pub/sub for real-time pixel placement
+      await this.sendPixelUpdate(x, y, color);
+      
+      // Update local state immediately for responsive UI
+      this.gameStore.updatePixel(x, y, color, this.currentUser.id);
+      
+      // Emit pixel update event
+      this.emit('pixelUpdate', {
+        x, y, color, userId: this.currentUser.id, timestamp: Date.now()
       });
-
-      // Only update local state if server request succeeded
-      if (response.ok) {
-        this.gameStore.updatePixel(x, y, color, this.currentUser.id);
-        
-        // Emit pixel update event
-        this.emit('pixelUpdate', {
-          x, y, color, userId: this.currentUser.id, timestamp: Date.now()
-        });
-      }
     } catch (error) {
       console.error('Error placing pixel:', error);
       throw error;
@@ -410,11 +406,11 @@ class TaubyteService {
       type: 'user'
     };
 
-    // Send via chatmessages channel
+    // Publish directly to chatmessages channel for real-time interaction
     await this.publishToChannel('chatmessages', chatMessage);
   }
 
-  // Send pixel update via pub/sub
+  // Send pixel update via pub/sub for real-time interaction
   async sendPixelUpdate(x: number, y: number, color: string): Promise<void> {
     if (!this.currentUser) {
       throw new Error('User not logged in');
@@ -428,7 +424,7 @@ class TaubyteService {
       timestamp: Date.now()
     };
 
-    // Send via pixelupdates channel
+    // Publish directly to pixelupdates channel for real-time interaction
     await this.publishToChannel('pixelupdates', pixel);
   }
 
