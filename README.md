@@ -1,4 +1,4 @@
-# Pixel Collab Game
+# Pixel Collab Game 
 
 A real-time collaborative pixel art game built with React, TypeScript, and WebSocket technology. Multiple players can draw together on a shared canvas, chat with each other, and see real-time updates.
 
