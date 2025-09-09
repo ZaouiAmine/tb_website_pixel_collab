@@ -42,7 +42,7 @@ class TaubyteService {
   private connectionMode: ConnectionMode = 'websocket';
   
   // Connection management
-  private pollingInterval: number | null = null;
+  private pollingInterval: ReturnType<typeof setInterval> | null = null;
   private websocket: WebSocket | null = null;
   private eventSource: EventSource | null = null;
   private retryCount = 0;
@@ -63,7 +63,7 @@ class TaubyteService {
   
   // Performance optimization
   private lastMessageTimestamp = 0;
-  private pingInterval: number | null = null;
+  private pingInterval: ReturnType<typeof setInterval> | null = null;
   private requestQueue: Array<() => Promise<void>> = [];
   private isProcessingQueue = false;
 
