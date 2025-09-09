@@ -18,6 +18,7 @@ export interface User {
 export interface GameState {
   canvas: Pixel[][];
   users: User[];
+  messages: ChatMessage[];
   currentUser: User | null;
   selectedColor: string;
   selectedTool: Tool;

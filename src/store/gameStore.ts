@@ -52,6 +52,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   // Initial state
   canvas: createEmptyCanvas(DEFAULT_CANVAS_SIZE.width, DEFAULT_CANVAS_SIZE.height),
   users: [],
+  messages: [],
   currentUser: null,
   selectedColor: '#ff0000',
   selectedTool: 'pencil',
@@ -156,17 +157,15 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
   // ===== Chat Management =====
   addChatMessage: (message) => {
-    // In a real implementation, this would be handled by a separate chat store
-    // For now, we'll just log it and could implement a simple message cache
-    console.log('Chat message:', message);
+    const { messages } = get();
+    const newMessages = [...messages, message];
     
-    // Optional: Implement a simple message cache
-    // const { chatMessages } = get();
-    // const newMessages = [...chatMessages, message];
-    // if (newMessages.length > MAX_CHAT_MESSAGES) {
-    //   newMessages.shift(); // Remove oldest message
-    // }
-    // set({ chatMessages: newMessages });
+    // Limit to 100 messages
+    if (newMessages.length > 100) {
+      newMessages.shift(); // Remove oldest message
+    }
+    
+    set({ messages: newMessages });
   },
 
   // ===== Settings Management =====
@@ -178,6 +177,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   reset: () => set({
     canvas: createEmptyCanvas(DEFAULT_CANVAS_SIZE.width, DEFAULT_CANVAS_SIZE.height),
     users: [],
+    messages: [],
     currentUser: null,
     selectedColor: '#ff0000',
     selectedTool: 'pencil',

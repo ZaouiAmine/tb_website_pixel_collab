@@ -19,7 +19,7 @@ const CONFIG = {
   MAX_RETRIES: 5,
   RETRY_DELAY: 1000,
   WEBSOCKET_RECONNECT_DELAY: 2000,
-  HEARTBEAT_INTERVAL: 30000,
+  HEARTBEAT_INTERVAL: 60000, // Increased to 60 seconds
   PIXEL_COOLDOWN: 100, // Reduced to 100ms for better UX
   MAX_PIXEL_QUEUE: 10
 };
@@ -216,8 +216,21 @@ class TaubyteService {
     });
   }
 
-  private handleChannelMessage(channelName: string, data: string): void {
+  private handleChannelMessage(channelName: string, data: string | Blob): void {
     try {
+      // Handle Blob data (binary messages from Taubyte)
+      if (data instanceof Blob) {
+        console.log(`📨 Binary message from ${channelName}:`, data, `size: ${data.size}, type: ${data.type}`);
+        // Convert Blob to text
+        data.text().then(text => {
+          console.log(`📨 Converted Blob to text for ${channelName}:`, text);
+          this.handleChannelMessage(channelName, text);
+        }).catch(error => {
+          console.error(`Error converting Blob to text for ${channelName}:`, error);
+        });
+        return;
+      }
+
       // Handle different message types
       if (data === 'ping' || data === 'pong') {
         // Heartbeat messages
@@ -291,7 +304,7 @@ class TaubyteService {
   private checkHeartbeats(): void {
     const now = Date.now();
     for (const [channelName, channel] of this.channels) {
-      if (channel.connected && (now - channel.lastHeartbeat) > CONFIG.HEARTBEAT_INTERVAL * 2) {
+      if (channel.connected && (now - channel.lastHeartbeat) > CONFIG.HEARTBEAT_INTERVAL * 3) {
         console.warn(`⚠️ No heartbeat from ${channelName}, reconnecting...`);
         this.handleChannelDisconnect(channelName, channel);
       }
