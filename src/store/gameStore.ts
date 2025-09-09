@@ -1,6 +1,13 @@
 import { create } from 'zustand';
 import type { GameState, User, Pixel, Tool, ChatMessage } from '../types/game';
 
+// ===== Constants =====
+const DEFAULT_CANVAS_SIZE = { width: 100, height: 100 };
+const DEFAULT_PIXEL_SIZE = 8;
+const DEFAULT_MAX_PIXELS_PER_USER = 1000;
+// const MAX_CHAT_MESSAGES = 100; // Reserved for future chat implementation
+
+// ===== Types =====
 interface GameStore extends GameState {
   // Actions
   setCurrentUser: (user: User | null) => void;
@@ -21,35 +28,39 @@ interface GameStore extends GameState {
   reset: () => void;
 }
 
-const defaultCanvasSize = { width: 100, height: 100 };
-const defaultPixelSize = 8;
-const defaultMaxPixelsPerUser = 1000;
-
+// ===== Utility Functions =====
 const createEmptyCanvas = (width: number, height: number): Pixel[][] => {
-  return Array(height).fill(null).map(() => 
-    Array(width).fill(null).map(() => ({
-      x: 0,
-      y: 0,
-      color: '#ffffff',
-      userId: '',
-      timestamp: 0
-    }))
-  );
+  const canvas: Pixel[][] = [];
+  for (let y = 0; y < height; y++) {
+    const row: Pixel[] = [];
+    for (let x = 0; x < width; x++) {
+      row.push({
+        x,
+        y,
+        color: '#ffffff',
+        userId: '',
+        timestamp: 0
+      });
+    }
+    canvas.push(row);
+  }
+  return canvas;
 };
 
+// ===== Store Implementation =====
 export const useGameStore = create<GameStore>((set, get) => ({
   // Initial state
-  canvas: createEmptyCanvas(defaultCanvasSize.width, defaultCanvasSize.height),
+  canvas: createEmptyCanvas(DEFAULT_CANVAS_SIZE.width, DEFAULT_CANVAS_SIZE.height),
   users: [],
   currentUser: null,
   selectedColor: '#ff0000',
   selectedTool: 'pencil',
   isConnected: false,
-  canvasSize: defaultCanvasSize,
-  pixelSize: defaultPixelSize,
-  maxPixelsPerUser: defaultMaxPixelsPerUser,
+  canvasSize: DEFAULT_CANVAS_SIZE,
+  pixelSize: DEFAULT_PIXEL_SIZE,
+  maxPixelsPerUser: DEFAULT_MAX_PIXELS_PER_USER,
 
-  // Actions
+  // ===== User Management =====
   setCurrentUser: (user) => set({ currentUser: user }),
   
   setSelectedColor: (color) => set({ selectedColor: color }),
@@ -57,32 +68,75 @@ export const useGameStore = create<GameStore>((set, get) => ({
   setSelectedTool: (tool) => set({ selectedTool: tool }),
   
   setConnected: (connected) => set({ isConnected: connected }),
-  
+
+  // ===== Canvas Management =====
   updatePixel: (x, y, color, userId) => {
     const { canvas } = get();
-    if (x >= 0 && x < canvas[0].length && y >= 0 && y < canvas.length) {
-      // Use Immer-like immutable update for better performance
-      const newCanvas = canvas.map((row, rowIndex) => 
-        rowIndex === y 
-          ? row.map((pixel, colIndex) => 
-              colIndex === x 
-                ? { x, y, color, userId, timestamp: Date.now() }
-                : pixel
-            )
-          : row
-      );
+    if (x >= 0 && x < canvas[0]?.length && y >= 0 && y < canvas.length) {
+      // Create new canvas with updated pixel (immutable update)
+      const newCanvas = canvas.map((row, rowIndex) => {
+        if (rowIndex === y) {
+          return row.map((pixel, colIndex) => {
+            if (colIndex === x) {
+              return { x, y, color, userId, timestamp: Date.now() };
+            }
+            return pixel;
+          });
+        }
+        return row;
+      });
       set({ canvas: newCanvas });
     }
   },
-  
+
+  setCanvas: (canvas) => set({ canvas }),
+
+  clearCanvas: () => {
+    const { canvasSize } = get();
+    set({ canvas: createEmptyCanvas(canvasSize.width, canvasSize.height) });
+  },
+
+  initializeCanvas: (width, height) => {
+    set({ 
+      canvas: createEmptyCanvas(width, height),
+      canvasSize: { width, height }
+    });
+  },
+
+  setCanvasSize: (width, height) => {
+    const { canvas } = get();
+    const newCanvas = createEmptyCanvas(width, height);
+    
+    // Copy existing pixels that fit in the new size
+    const maxY = Math.min(height, canvas.length);
+    const maxX = Math.min(width, canvas[0]?.length || 0);
+    
+    for (let y = 0; y < maxY; y++) {
+      for (let x = 0; x < maxX; x++) {
+        if (canvas[y]?.[x]?.userId) {
+          newCanvas[y][x] = { ...canvas[y][x], x, y };
+        }
+      }
+    }
+    
+    set({ 
+      canvas: newCanvas,
+      canvasSize: { width, height }
+    });
+  },
+
+  // ===== User Management =====
   addUser: (user) => {
     const { users } = get();
     const existingUserIndex = users.findIndex(u => u.id === user.id);
+    
     if (existingUserIndex >= 0) {
+      // Update existing user
       const newUsers = [...users];
       newUsers[existingUserIndex] = user;
       set({ users: newUsers });
     } else {
+      // Add new user
       set({ users: [...users, user] });
     }
   },
@@ -99,60 +153,37 @@ export const useGameStore = create<GameStore>((set, get) => ({
     );
     set({ users: newUsers });
   },
-  
+
+  // ===== Chat Management =====
   addChatMessage: (message) => {
-    // This would be handled by a separate chat store in a real implementation
-    // For now, we'll just log it
+    // In a real implementation, this would be handled by a separate chat store
+    // For now, we'll just log it and could implement a simple message cache
     console.log('Chat message:', message);
-  },
-  
-  clearCanvas: () => {
-    const { canvasSize } = get();
-    set({ canvas: createEmptyCanvas(canvasSize.width, canvasSize.height) });
-  },
-  
-  initializeCanvas: (width, height) => {
-    set({ 
-      canvas: createEmptyCanvas(width, height),
-      canvasSize: { width, height }
-    });
-  },
-  
-  setCanvasSize: (width, height) => {
-    const { canvas } = get();
-    const newCanvas = createEmptyCanvas(width, height);
     
-    // Copy existing pixels that fit in the new size
-    for (let y = 0; y < Math.min(height, canvas.length); y++) {
-      for (let x = 0; x < Math.min(width, canvas[y].length); x++) {
-        if (canvas[y][x].userId) {
-          newCanvas[y][x] = { ...canvas[y][x], x, y };
-        }
-      }
-    }
-    
-    set({ 
-      canvas: newCanvas,
-      canvasSize: { width, height }
-    });
+    // Optional: Implement a simple message cache
+    // const { chatMessages } = get();
+    // const newMessages = [...chatMessages, message];
+    // if (newMessages.length > MAX_CHAT_MESSAGES) {
+    //   newMessages.shift(); // Remove oldest message
+    // }
+    // set({ chatMessages: newMessages });
   },
-  
+
+  // ===== Settings Management =====
   setPixelSize: (size) => set({ pixelSize: size }),
   
-  
   setMaxPixelsPerUser: (max) => set({ maxPixelsPerUser: max }),
-  
-  setCanvas: (canvas) => set({ canvas }),
-  
+
+  // ===== Reset =====
   reset: () => set({
-    canvas: createEmptyCanvas(defaultCanvasSize.width, defaultCanvasSize.height),
+    canvas: createEmptyCanvas(DEFAULT_CANVAS_SIZE.width, DEFAULT_CANVAS_SIZE.height),
     users: [],
     currentUser: null,
     selectedColor: '#ff0000',
     selectedTool: 'pencil',
     isConnected: false,
-    canvasSize: defaultCanvasSize,
-    pixelSize: defaultPixelSize,
-    maxPixelsPerUser: defaultMaxPixelsPerUser,
+    canvasSize: DEFAULT_CANVAS_SIZE,
+    pixelSize: DEFAULT_PIXEL_SIZE,
+    maxPixelsPerUser: DEFAULT_MAX_PIXELS_PER_USER,
   })
 }));
