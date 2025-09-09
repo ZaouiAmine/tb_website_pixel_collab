@@ -57,21 +57,21 @@ export const GameStats: React.FC = () => {
           <h4 className="font-pixel text-xs text-pixel-accent">Connection</h4>
           <div className="flex items-center justify-between text-xs">
             <div className="flex items-center gap-2">
-              {connectionStatus.connected ? (
+              {connectionStatus.isConnected ? (
                 <Wifi className="w-3 h-3 text-green-500" />
               ) : (
                 <WifiOff className="w-3 h-3 text-red-500" />
               )}
               <span className="text-pixel-text">
-                {connectionStatus.connected ? 'Connected' : 'Disconnected'}
+                {connectionStatus.isConnected ? 'Connected' : 'Disconnected'}
               </span>
             </div>
             <span className={`text-xs px-2 py-1 rounded ${
-              connectionStatus.mode === 'websocket' 
+              connectionStatus.connectionMode === 'websocket' 
                 ? 'bg-green-100 text-green-800' 
                 : 'bg-yellow-100 text-yellow-800'
             }`}>
-              {connectionStatus.mode === 'websocket' ? 'WebSocket' : 'Polling'}
+              {connectionStatus.connectionMode === 'websocket' ? 'WebSocket' : 'Polling'}
             </span>
           </div>
         </div>
