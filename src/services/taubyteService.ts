@@ -15,23 +15,32 @@ const CONFIG = {
     USER_UPDATES: 'userupdates',
     CHAT_MESSAGES: 'chatmessages'
   },
-  POLLING_INTERVAL: 2000, // Fallback polling for canvas/users/messages
-  MAX_RETRIES: 3,
-  RETRY_DELAY: 2000,
-  CACHE_DURATION: 5000, // 5 seconds cache for canvas data
-  MAX_MESSAGES_CACHE: 100,
-  WEBSOCKET_RECONNECT_DELAY: 3000
+  POLLING_INTERVAL: 5000, // Reduced polling for fallback only
+  MAX_RETRIES: 5,
+  RETRY_DELAY: 1000,
+  WEBSOCKET_RECONNECT_DELAY: 2000,
+  HEARTBEAT_INTERVAL: 30000,
+  PIXEL_COOLDOWN: 100, // Reduced to 100ms for better UX
+  MAX_PIXEL_QUEUE: 10
 };
 
 // ===== Types =====
 type EventType = 'pixelUpdate' | 'userJoin' | 'userLeave' | 'chatMessage' | 'connect' | 'disconnect' | 'error' | 'canvasUpdate' | 'userUpdate';
 type ConnectionMode = 'websocket' | 'polling';
 
-interface CachedData {
-  canvas: any;
-  users: User[];
-  messages: ChatMessage[];
-  lastUpdate: number;
+interface WebSocketChannel {
+  ws: WebSocket | null;
+  url: string;
+  connected: boolean;
+  reconnectAttempts: number;
+  lastHeartbeat: number;
+}
+
+interface PixelQueueItem {
+  x: number;
+  y: number;
+  color: string;
+  timestamp: number;
 }
 
 // ===== TaubyteService Class =====
@@ -41,34 +50,33 @@ class TaubyteService {
   private isConnected = false;
   private connectionMode: ConnectionMode = 'websocket';
   
-  // Connection management
+  // WebSocket management
+  private channels: Map<string, WebSocketChannel> = new Map();
   private pollingInterval: NodeJS.Timeout | null = null;
-  private websockets: Map<string, WebSocket> = new Map();
+  private heartbeatInterval: NodeJS.Timeout | null = null;
   
   // Event system
   private eventListeners: Map<EventType, Function[]> = new Map();
   
-  // Caching system
-  private cache: CachedData = {
-    canvas: null,
-    users: [],
-    messages: [],
-    lastUpdate: 0
-  };
-  
-  
-  // Rate limiting for pixel placement
+  // Rate limiting and queuing
   private lastPixelTime = 0;
-  private pixelCooldown = 2000; // 2 seconds between pixels
+  private pixelQueue: PixelQueueItem[] = [];
+  private isProcessingPixelQueue = false;
+  
+  // Connection state
+  private isReconnecting = false;
 
   constructor() {
     this.setupEventListeners();
+    this.initializeChannels();
   }
 
   // ===== Event System =====
   private setupEventListeners(): void {
-    // Initialize event listener arrays
-    const eventTypes: EventType[] = ['pixelUpdate', 'userJoin', 'userLeave', 'chatMessage', 'connect', 'disconnect', 'error', 'canvasUpdate', 'userUpdate'];
+    const eventTypes: EventType[] = [
+      'pixelUpdate', 'userJoin', 'userLeave', 'chatMessage', 
+      'connect', 'disconnect', 'error', 'canvasUpdate', 'userUpdate'
+    ];
     eventTypes.forEach(type => {
       this.eventListeners.set(type, []);
     });
@@ -100,7 +108,18 @@ class TaubyteService {
     });
   }
 
-
+  // ===== Channel Management =====
+  private initializeChannels(): void {
+    Object.values(CONFIG.WEBSOCKET_CHANNELS).forEach(channelName => {
+      this.channels.set(channelName, {
+        ws: null,
+        url: '',
+        connected: false,
+        reconnectAttempts: 0,
+        lastHeartbeat: 0
+      });
+    });
+  }
 
   // ===== Connection Management =====
   async connect(): Promise<void> {
@@ -109,112 +128,85 @@ class TaubyteService {
     }
 
     try {
-      // Connect to all WebSocket channels
-      await this.connectWebSockets();
+      console.log('🔌 Connecting to Taubyte WebSocket channels...');
       
-      // Start fallback polling for canvas/users/messages
+      // Get WebSocket URLs for all channels
+      await this.getWebSocketURLs();
+      
+      // Connect to all channels
+      await this.connectAllChannels();
+      
+      // Start heartbeat monitoring
+      this.startHeartbeat();
+      
+      // Start fallback polling
       this.startPolling();
       
       this.isConnected = true;
       this.emit('connect');
       this.gameStore.setConnected(true);
+      
+      console.log('✅ Connected to all Taubyte channels');
     } catch (error) {
+      console.error('❌ Failed to connect:', error);
       this.isConnected = false;
       this.emit('error', error);
       throw error;
     }
   }
 
-  private async connectWebSockets(): Promise<void> {
+  private async getWebSocketURLs(): Promise<void> {
     const baseUrl = CONFIG.BASE_URL.replace('http://', 'ws://').replace('https://', 'wss://');
     
-    // Get proper WebSocket URLs from backend for each channel
-    const pixelUpdatesUrl = await this.getWebSocketURL(CONFIG.WEBSOCKET_CHANNELS.PIXEL_UPDATES);
-    const userUpdatesUrl = await this.getWebSocketURL(CONFIG.WEBSOCKET_CHANNELS.USER_UPDATES);
-    const chatMessagesUrl = await this.getWebSocketURL(CONFIG.WEBSOCKET_CHANNELS.CHAT_MESSAGES);
-    
-    // Connect to pixel updates channel
-    await this.connectWebSocketChannel(
-      CONFIG.WEBSOCKET_CHANNELS.PIXEL_UPDATES,
-      `${baseUrl}/${pixelUpdatesUrl}`,
-      this.handlePixelUpdate.bind(this)
-    );
-
-    // Connect to user updates channel
-    await this.connectWebSocketChannel(
-      CONFIG.WEBSOCKET_CHANNELS.USER_UPDATES,
-      `${baseUrl}/${userUpdatesUrl}`,
-      this.handleUserUpdate.bind(this)
-    );
-
-    // Connect to chat messages channel
-    await this.connectWebSocketChannel(
-      CONFIG.WEBSOCKET_CHANNELS.CHAT_MESSAGES,
-      `${baseUrl}/${chatMessagesUrl}`,
-      this.handleChatMessage.bind(this)
-    );
-  }
-
-  private async getWebSocketURL(room: string): Promise<string> {
-    try {
-      const response = await this.makeRequest(`/api/getWebSocketURL?room=${room}`);
-      const data = await response.json();
-      return data.websocket_url;
-    } catch (error) {
-      console.error(`Error getting WebSocket URL for ${room}:`, error);
-      throw error;
+    for (const [channelName, channel] of this.channels) {
+      try {
+        const response = await this.makeRequest(`/api/getWebSocketURL?room=${channelName}`);
+        const data = await response.json();
+        channel.url = `${baseUrl}/${data.websocket_url}`;
+        console.log(`📡 Got WebSocket URL for ${channelName}:`, channel.url);
+      } catch (error) {
+        console.error(`Failed to get WebSocket URL for ${channelName}:`, error);
+        throw error;
+      }
     }
   }
 
-  private async connectWebSocketChannel(
-    channelName: string, 
-    url: string, 
-    messageHandler: (data: any) => void
-  ): Promise<void> {
+  private async connectAllChannels(): Promise<void> {
+    const connectionPromises = Array.from(this.channels.entries()).map(([channelName, channel]) =>
+      this.connectChannel(channelName, channel)
+    );
+    
+    await Promise.all(connectionPromises);
+  }
+
+  private async connectChannel(channelName: string, channel: WebSocketChannel): Promise<void> {
     return new Promise((resolve, reject) => {
       try {
-        const ws = new WebSocket(url);
+        console.log(`🔗 Connecting to ${channelName}...`);
+        
+        const ws = new WebSocket(channel.url);
+        channel.ws = ws;
         
         ws.onopen = () => {
-          console.log(`Connected to ${channelName} channel`);
-          this.websockets.set(channelName, ws);
+          console.log(`✅ Connected to ${channelName}`);
+          channel.connected = true;
+          channel.reconnectAttempts = 0;
+          channel.lastHeartbeat = Date.now();
           resolve();
         };
 
         ws.onmessage = (event) => {
-          try {
-            // Log the raw message to see what we're receiving
-            console.log(`Raw message from ${channelName}:`, event.data);
-            
-            // Try to parse as JSON, but handle non-JSON messages gracefully
-            let data;
-            try {
-              data = JSON.parse(event.data);
-            } catch (parseError) {
-              // If it's not JSON, it might be a connection message or heartbeat
-              console.log(`Non-JSON message from ${channelName}:`, event.data);
-              return;
-            }
-            
-            messageHandler(data);
-          } catch (error) {
-            console.error(`Error handling message from ${channelName}:`, error);
-          }
+          this.handleChannelMessage(channelName, event.data);
         };
 
-        ws.onclose = () => {
-          console.log(`Disconnected from ${channelName} channel`);
-          this.websockets.delete(channelName);
-          // Attempt to reconnect after delay
-          setTimeout(() => {
-            if (this.isConnected) {
-              this.connectWebSocketChannel(channelName, url, messageHandler);
-            }
-          }, CONFIG.WEBSOCKET_RECONNECT_DELAY);
+        ws.onclose = (event) => {
+          console.log(`🔌 Disconnected from ${channelName}:`, event.code, event.reason);
+          channel.connected = false;
+          this.handleChannelDisconnect(channelName, channel);
         };
 
         ws.onerror = (error) => {
-          console.error(`WebSocket error for ${channelName}:`, error);
+          console.error(`❌ WebSocket error for ${channelName}:`, error);
           reject(error);
         };
 
@@ -224,87 +216,154 @@ class TaubyteService {
     });
   }
 
+  private handleChannelMessage(channelName: string, data: string): void {
+    try {
+      // Handle different message types
+      if (data === 'ping' || data === 'pong') {
+        // Heartbeat messages
+        const channel = this.channels.get(channelName);
+        if (channel) {
+          channel.lastHeartbeat = Date.now();
+        }
+        return;
+      }
+
+      // Try to parse as JSON
+      let messageData;
+      try {
+        messageData = JSON.parse(data);
+      } catch (parseError) {
+        console.log(`📨 Non-JSON message from ${channelName}:`, data);
+        return;
+      }
+
+      // Route message to appropriate handler
+      switch (channelName) {
+        case CONFIG.WEBSOCKET_CHANNELS.PIXEL_UPDATES:
+          this.handlePixelUpdate(messageData);
+          break;
+        case CONFIG.WEBSOCKET_CHANNELS.USER_UPDATES:
+          this.handleUserUpdate(messageData);
+          break;
+        case CONFIG.WEBSOCKET_CHANNELS.CHAT_MESSAGES:
+          this.handleChatMessage(messageData);
+          break;
+        default:
+          console.log(`📨 Unknown channel message from ${channelName}:`, messageData);
+      }
+    } catch (error) {
+      console.error(`Error handling message from ${channelName}:`, error);
+    }
+  }
+
+  private handleChannelDisconnect(channelName: string, channel: WebSocketChannel): void {
+    if (this.isConnected && !this.isReconnecting) {
+      channel.reconnectAttempts++;
+      
+      if (channel.reconnectAttempts <= CONFIG.MAX_RETRIES) {
+        console.log(`🔄 Reconnecting to ${channelName} (attempt ${channel.reconnectAttempts})...`);
+        setTimeout(() => {
+          this.connectChannel(channelName, channel).catch(error => {
+            console.error(`Failed to reconnect to ${channelName}:`, error);
+          });
+        }, CONFIG.WEBSOCKET_RECONNECT_DELAY * channel.reconnectAttempts);
+      } else {
+        console.error(`❌ Max reconnection attempts reached for ${channelName}`);
+        this.emit('error', new Error(`Failed to reconnect to ${channelName}`));
+      }
+    }
+  }
+
+  private startHeartbeat(): void {
+    this.stopHeartbeat();
+    this.heartbeatInterval = setInterval(() => {
+      this.checkHeartbeats();
+    }, CONFIG.HEARTBEAT_INTERVAL);
+  }
+
+  private stopHeartbeat(): void {
+    if (this.heartbeatInterval) {
+      clearInterval(this.heartbeatInterval);
+      this.heartbeatInterval = null;
+    }
+  }
+
+  private checkHeartbeats(): void {
+    const now = Date.now();
+    for (const [channelName, channel] of this.channels) {
+      if (channel.connected && (now - channel.lastHeartbeat) > CONFIG.HEARTBEAT_INTERVAL * 2) {
+        console.warn(`⚠️ No heartbeat from ${channelName}, reconnecting...`);
+        this.handleChannelDisconnect(channelName, channel);
+      }
+    }
+  }
+
   disconnect(): void {
+    console.log('🔌 Disconnecting from all channels...');
     this.isConnected = false;
+    this.isReconnecting = true;
+    
     this.stopPolling();
-    this.disconnectWebSockets();
+    this.stopHeartbeat();
+    
+    // Close all WebSocket connections
+    for (const [channelName, channel] of this.channels) {
+      if (channel.ws) {
+        console.log(`🔌 Closing ${channelName} connection`);
+        channel.ws.close();
+        channel.ws = null;
+        channel.connected = false;
+      }
+    }
+    
     this.emit('disconnect');
     this.gameStore.setConnected(false);
+    this.isReconnecting = false;
   }
 
-  private disconnectWebSockets(): void {
-    this.websockets.forEach((ws, channelName) => {
-      console.log(`Disconnecting from ${channelName} channel`);
-      ws.close();
-    });
-    this.websockets.clear();
-  }
-
-  // ===== WebSocket Message Handlers =====
+  // ===== Message Handlers =====
   private handlePixelUpdate(pixel: any): void {
-    console.log('Received pixel update:', pixel);
-    this.gameStore.updatePixel(pixel.X, pixel.Y, pixel.Color, pixel.UserID);
+    console.log('🎨 Received pixel update:', pixel);
+    this.gameStore.updatePixel(pixel.x, pixel.y, pixel.color, pixel.userId);
     this.emit('pixelUpdate', {
-      x: pixel.X,
-      y: pixel.Y,
-      color: pixel.Color,
-      userId: pixel.UserID,
-      timestamp: pixel.Timestamp
+      x: pixel.x,
+      y: pixel.y,
+      color: pixel.color,
+      userId: pixel.userId,
+      username: pixel.username,
+      timestamp: pixel.timestamp
     });
   }
 
   private handleUserUpdate(user: any): void {
-    console.log('Received user update:', user);
-    if (user.IsOnline) {
+    console.log('👤 Received user update:', user);
+    if (user.isOnline) {
       this.gameStore.addUser(user);
       this.emit('userJoin', user);
     } else {
-      this.gameStore.removeUser(user.ID);
+      this.gameStore.removeUser(user.id);
       this.emit('userLeave', user);
     }
   }
 
   private handleChatMessage(message: any): void {
-    console.log('Received chat message:', message);
+    console.log('💬 Received chat message:', message);
     this.gameStore.addChatMessage(message);
     this.emit('chatMessage', message);
   }
 
-  // ===== WebSocket Publishing =====
+  // ===== Publishing =====
   private async publishToChannel(channelName: string, data: any): Promise<void> {
-    const ws = this.websockets.get(channelName);
-    if (!ws || ws.readyState !== WebSocket.OPEN) {
+    const channel = this.channels.get(channelName);
+    if (!channel || !channel.ws || !channel.connected) {
       throw new Error(`WebSocket channel ${channelName} is not connected`);
     }
 
     try {
-      ws.send(JSON.stringify(data));
+      channel.ws.send(JSON.stringify(data));
     } catch (error) {
       console.error(`Error publishing to ${channelName}:`, error);
       throw error;
-    }
-  }
-
-  // ===== Polling System =====
-  private startPolling(): void {
-    this.stopPolling();
-    
-    this.pollingInterval = setInterval(async () => {
-      try {
-        await this.pollCanvas();
-        await this.pollUsers();
-        await this.pollMessages();
-      } catch (error) {
-        console.error('Polling error:', error);
-        this.emit('error', error);
-      }
-    }, CONFIG.POLLING_INTERVAL);
-  }
-
-  private stopPolling(): void {
-    if (this.pollingInterval) {
-      clearInterval(this.pollingInterval);
-      this.pollingInterval = null;
     }
   }
 
@@ -314,40 +373,72 @@ class TaubyteService {
       throw new Error('Not connected or user not logged in');
     }
 
-    // Check cooldown to prevent spam
-    const now = Date.now();
-    const timeSinceLastPixel = now - this.lastPixelTime;
+    // Add to queue for rate limiting
+    const pixelItem: PixelQueueItem = {
+      x, y, color, timestamp: Date.now()
+    };
+
+    this.pixelQueue.push(pixelItem);
     
-    if (timeSinceLastPixel < this.pixelCooldown) {
-      const waitTime = this.pixelCooldown - timeSinceLastPixel;
-      console.log(`Rate limiting: waiting ${waitTime}ms before next pixel`);
-      await new Promise(resolve => setTimeout(resolve, waitTime));
+    // Process queue if not already processing
+    if (!this.isProcessingPixelQueue) {
+      this.processPixelQueue();
+    }
+  }
+
+  private async processPixelQueue(): Promise<void> {
+    if (this.isProcessingPixelQueue || this.pixelQueue.length === 0) {
+      return;
     }
 
-    try {
-      // Publish directly to WebSocket channel
-      await this.publishToChannel(CONFIG.WEBSOCKET_CHANNELS.PIXEL_UPDATES, {
-        X: x,
-        Y: y,
-        Color: color,
-        UserID: this.currentUser.id,
-        Timestamp: Date.now()
-      });
+    this.isProcessingPixelQueue = true;
+
+    while (this.pixelQueue.length > 0) {
+      const pixelItem = this.pixelQueue.shift();
+      if (!pixelItem) continue;
+
+      // Check cooldown
+      const now = Date.now();
+      const timeSinceLastPixel = now - this.lastPixelTime;
       
-      // Update local state immediately for responsive UI
-      this.gameStore.updatePixel(x, y, color, this.currentUser.id);
-      
-      this.emit('pixelUpdate', {
-        x, y, color, userId: this.currentUser.id, timestamp: Date.now()
-      });
-      
-      // Update last pixel time
-      this.lastPixelTime = Date.now();
-      
-    } catch (error) {
-      console.error('Error placing pixel:', error);
-      throw error;
+      if (timeSinceLastPixel < CONFIG.PIXEL_COOLDOWN) {
+        const waitTime = CONFIG.PIXEL_COOLDOWN - timeSinceLastPixel;
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+      }
+
+      try {
+        // Publish pixel update
+        await this.publishToChannel(CONFIG.WEBSOCKET_CHANNELS.PIXEL_UPDATES, {
+          x: pixelItem.x,
+          y: pixelItem.y,
+          color: pixelItem.color,
+          userId: this.currentUser!.id,
+          username: this.currentUser!.username,
+          timestamp: Date.now()
+        });
+        
+        // Update local state immediately for responsive UI
+        this.gameStore.updatePixel(pixelItem.x, pixelItem.y, pixelItem.color, this.currentUser!.id);
+        
+        this.emit('pixelUpdate', {
+          x: pixelItem.x,
+          y: pixelItem.y,
+          color: pixelItem.color,
+          userId: this.currentUser!.id,
+          timestamp: Date.now()
+        });
+        
+        this.lastPixelTime = Date.now();
+        
+      } catch (error) {
+        console.error('Error placing pixel:', error);
+        // Re-queue the pixel for retry
+        this.pixelQueue.unshift(pixelItem);
+        break;
+      }
     }
+
+    this.isProcessingPixelQueue = false;
   }
 
   async joinGame(username: string, userId: string): Promise<User> {
@@ -365,14 +456,14 @@ class TaubyteService {
       // Connect to WebSocket channels first
       await this.connect();
 
-      // Publish directly to WebSocket channel
+      // Publish user join
       await this.publishToChannel(CONFIG.WEBSOCKET_CHANNELS.USER_UPDATES, {
-        ID: user.id,
-        Username: user.username,
-        Color: user.color,
-        IsOnline: user.isOnline,
-        LastSeen: user.lastSeen,
-        PixelsPlaced: user.pixelsPlaced
+        id: user.id,
+        username: user.username,
+        color: user.color,
+        isOnline: user.isOnline,
+        lastSeen: user.lastSeen,
+        pixelsPlaced: user.pixelsPlaced
       });
 
       this.currentUser = user;
@@ -400,12 +491,12 @@ class TaubyteService {
     if (this.currentUser) {
       // Publish user offline status
       await this.publishToChannel(CONFIG.WEBSOCKET_CHANNELS.USER_UPDATES, {
-        ID: this.currentUser.id,
-        Username: this.currentUser.username,
-        Color: this.currentUser.color,
-        IsOnline: false,
-        LastSeen: Date.now(),
-        PixelsPlaced: this.currentUser.pixelsPlaced
+        id: this.currentUser.id,
+        username: this.currentUser.username,
+        color: this.currentUser.color,
+        isOnline: false,
+        lastSeen: Date.now(),
+        pixelsPlaced: this.currentUser.pixelsPlaced
       });
       
       this.disconnect();
@@ -420,15 +511,15 @@ class TaubyteService {
 
     // Create chat message object
     const chatMessage = {
-      ID: `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-      UserID: this.currentUser.id,
-      Username: this.currentUser.username,
-      Message: message,
-      Timestamp: Date.now(),
-      Type: "user"
+      id: `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      userId: this.currentUser.id,
+      username: this.currentUser.username,
+      message: message,
+      timestamp: Date.now(),
+      type: "user"
     };
 
-    // Publish directly to WebSocket channel
+    // Publish chat message
     await this.publishToChannel(CONFIG.WEBSOCKET_CHANNELS.CHAT_MESSAGES, chatMessage);
   }
 
@@ -474,13 +565,37 @@ class TaubyteService {
     }
   }
 
-  // ===== Polling Methods =====
+  // ===== Polling System (Fallback) =====
+  private startPolling(): void {
+    this.stopPolling();
+    
+    this.pollingInterval = setInterval(async () => {
+      try {
+        // Only poll if WebSocket connections are not healthy
+        const healthyChannels = Array.from(this.channels.values()).filter(ch => ch.connected).length;
+        if (healthyChannels < Object.keys(CONFIG.WEBSOCKET_CHANNELS).length) {
+          console.log('📡 Fallback polling active...');
+          await this.pollCanvas();
+          await this.pollUsers();
+          await this.pollMessages();
+        }
+      } catch (error) {
+        console.error('Polling error:', error);
+      }
+    }, CONFIG.POLLING_INTERVAL);
+  }
+
+  private stopPolling(): void {
+    if (this.pollingInterval) {
+      clearInterval(this.pollingInterval);
+      this.pollingInterval = null;
+    }
+  }
+
   private async pollCanvas(): Promise<void> {
     try {
       const canvas = await this.getCanvas();
       if (canvas) {
-        this.cache.canvas = canvas;
-        this.cache.lastUpdate = Date.now();
         this.emit('canvasUpdate', canvas);
       }
     } catch (error) {
@@ -492,7 +607,6 @@ class TaubyteService {
     try {
       const users = await this.getUsers();
       if (users) {
-        this.cache.users = users;
         this.emit('userUpdate', users);
       }
     } catch (error) {
@@ -504,7 +618,7 @@ class TaubyteService {
     try {
       const messages = await this.getMessages();
       if (messages) {
-        this.cache.messages = messages;
+        // Handle messages if needed
       }
     } catch (error) {
       console.error('Error polling messages:', error);
@@ -539,28 +653,39 @@ class TaubyteService {
   getPixelCooldownStatus(): { 
     timeUntilNextPixel: number; 
     cooldown: number; 
-    canPlacePixel: boolean 
+    canPlacePixel: boolean;
+    queueLength: number;
   } {
     const now = Date.now();
     const timeSinceLastPixel = now - this.lastPixelTime;
-    const timeUntilNextPixel = Math.max(0, this.pixelCooldown - timeSinceLastPixel);
+    const timeUntilNextPixel = Math.max(0, CONFIG.PIXEL_COOLDOWN - timeSinceLastPixel);
     
     return {
       timeUntilNextPixel,
-      cooldown: this.pixelCooldown,
-      canPlacePixel: timeUntilNextPixel === 0
+      cooldown: CONFIG.PIXEL_COOLDOWN,
+      canPlacePixel: timeUntilNextPixel === 0,
+      queueLength: this.pixelQueue.length
     };
   }
 
   getConnectionStatus(): {
     isConnected: boolean;
     connectionMode: ConnectionMode;
-    websocketChannels: string[];
+    channels: { [key: string]: { connected: boolean; reconnectAttempts: number } };
   } {
+    const channels: { [key: string]: { connected: boolean; reconnectAttempts: number } } = {};
+    
+    for (const [channelName, channel] of this.channels) {
+      channels[channelName] = {
+        connected: channel.connected,
+        reconnectAttempts: channel.reconnectAttempts
+      };
+    }
+
     return {
       isConnected: this.isConnected,
       connectionMode: this.connectionMode,
-      websocketChannels: Array.from(this.websockets.keys())
+      channels
     };
   }
 }
