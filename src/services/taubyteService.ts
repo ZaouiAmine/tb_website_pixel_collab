@@ -62,6 +62,16 @@ class TaubyteService {
   private pingInterval: NodeJS.Timeout | null = null;
   private requestQueue: Array<() => Promise<void>> = [];
   private isProcessingQueue = false;
+  
+  // Smart rate limiting for pixel placement
+  private pixelCooldown = 100; // Start with 100ms
+  private maxCooldown = 2000;  // Max 2 seconds
+  private minCooldown = 50;    // Min 50ms
+  private lastPixelTime = 0;
+  private consecutiveErrors = 0;
+  private maxConsecutiveErrors = 3;
+  private pixelQueue: Array<{x: number, y: number, color: string}> = [];
+  private isProcessingPixelQueue = false;
 
   constructor() {
     this.initializeEventListeners();
@@ -396,19 +406,78 @@ class TaubyteService {
       throw new Error('Not connected or user not logged in');
     }
 
-    try {
-      await this.sendPixelUpdate(x, y, color);
-      
-      // Update local state immediately for responsive UI
-      this.gameStore.updatePixel(x, y, color, this.currentUser.id);
-      
-      this.emit('pixelUpdate', {
-        x, y, color, userId: this.currentUser.id, timestamp: Date.now()
-      });
-    } catch (error) {
-      console.error('Error placing pixel:', error);
-      throw error;
+    // Update UI immediately for responsive experience
+    this.gameStore.updatePixel(x, y, color, this.currentUser.id);
+    this.emit('pixelUpdate', {
+      x, y, color, userId: this.currentUser.id, timestamp: Date.now()
+    });
+
+    // Add to queue for server sync
+    this.pixelQueue.push({ x, y, color });
+    
+    // Process queue if not already processing
+    if (!this.isProcessingPixelQueue) {
+      this.processPixelQueue();
     }
+  }
+
+  private async processPixelQueue(): Promise<void> {
+    if (this.isProcessingPixelQueue || this.pixelQueue.length === 0) {
+      return;
+    }
+
+    this.isProcessingPixelQueue = true;
+
+    while (this.pixelQueue.length > 0) {
+      const pixel = this.pixelQueue.shift()!;
+      
+      try {
+        // Wait for cooldown
+        await this.waitForPixelCooldown();
+        
+        // Send to server
+        await this.sendPixelUpdate(pixel.x, pixel.y, pixel.color);
+        
+        // Success: reduce cooldown and reset error count
+        this.consecutiveErrors = 0;
+        this.pixelCooldown = Math.max(this.minCooldown, this.pixelCooldown * 0.9);
+        
+        console.log(`Pixel placed successfully: (${pixel.x},${pixel.y}) - cooldown: ${this.pixelCooldown}ms`);
+        
+      } catch (error) {
+        console.error('Error placing pixel:', error);
+        
+        // Error: increase cooldown and error count
+        this.consecutiveErrors++;
+        this.pixelCooldown = Math.min(this.maxCooldown, this.pixelCooldown * 1.5);
+        
+        // If too many errors, pause processing
+        if (this.consecutiveErrors >= this.maxConsecutiveErrors) {
+          console.log(`Too many errors (${this.consecutiveErrors}), pausing pixel processing for 5s`);
+          this.pixelCooldown = 5000;
+          this.consecutiveErrors = 0;
+        }
+        
+        // Re-queue the pixel for retry
+        this.pixelQueue.unshift(pixel);
+        break; // Exit loop to wait for cooldown
+      }
+    }
+
+    this.isProcessingPixelQueue = false;
+  }
+
+  private async waitForPixelCooldown(): Promise<void> {
+    const now = Date.now();
+    const timeSinceLastPixel = now - this.lastPixelTime;
+    
+    if (timeSinceLastPixel < this.pixelCooldown) {
+      const waitTime = this.pixelCooldown - timeSinceLastPixel;
+      console.log(`Waiting ${waitTime}ms before next pixel`);
+      await new Promise(resolve => setTimeout(resolve, waitTime));
+    }
+    
+    this.lastPixelTime = Date.now();
   }
 
   async joinGame(username: string, userId: string): Promise<User> {
@@ -692,6 +761,20 @@ class TaubyteService {
       connected: this.isConnected,
       mode: this.connectionMode,
       websocketState: this.websocket?.readyState
+    };
+  }
+
+  getPixelRateLimitStatus(): { 
+    cooldown: number; 
+    queueLength: number; 
+    consecutiveErrors: number; 
+    isProcessing: boolean 
+  } {
+    return {
+      cooldown: this.pixelCooldown,
+      queueLength: this.pixelQueue.length,
+      consecutiveErrors: this.consecutiveErrors,
+      isProcessing: this.isProcessingPixelQueue
     };
   }
 
