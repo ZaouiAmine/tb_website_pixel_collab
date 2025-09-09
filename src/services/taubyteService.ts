@@ -183,10 +183,22 @@ class TaubyteService {
 
         ws.onmessage = (event) => {
           try {
-            const data = JSON.parse(event.data);
+            // Log the raw message to see what we're receiving
+            console.log(`Raw message from ${channelName}:`, event.data);
+            
+            // Try to parse as JSON, but handle non-JSON messages gracefully
+            let data;
+            try {
+              data = JSON.parse(event.data);
+            } catch (parseError) {
+              // If it's not JSON, it might be a connection message or heartbeat
+              console.log(`Non-JSON message from ${channelName}:`, event.data);
+              return;
+            }
+            
             messageHandler(data);
           } catch (error) {
-            console.error(`Error parsing message from ${channelName}:`, error);
+            console.error(`Error handling message from ${channelName}:`, error);
           }
         };
 
