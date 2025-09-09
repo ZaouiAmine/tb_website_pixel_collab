@@ -128,26 +128,42 @@ class TaubyteService {
   private async connectWebSockets(): Promise<void> {
     const baseUrl = CONFIG.BASE_URL.replace('http://', 'ws://').replace('https://', 'wss://');
     
+    // Get proper WebSocket URLs from backend for each channel
+    const pixelUpdatesUrl = await this.getWebSocketURL(CONFIG.WEBSOCKET_CHANNELS.PIXEL_UPDATES);
+    const userUpdatesUrl = await this.getWebSocketURL(CONFIG.WEBSOCKET_CHANNELS.USER_UPDATES);
+    const chatMessagesUrl = await this.getWebSocketURL(CONFIG.WEBSOCKET_CHANNELS.CHAT_MESSAGES);
+    
     // Connect to pixel updates channel
     await this.connectWebSocketChannel(
       CONFIG.WEBSOCKET_CHANNELS.PIXEL_UPDATES,
-      `${baseUrl}/ws/${CONFIG.WEBSOCKET_CHANNELS.PIXEL_UPDATES}`,
+      `${baseUrl}/${pixelUpdatesUrl}`,
       this.handlePixelUpdate.bind(this)
     );
 
     // Connect to user updates channel
     await this.connectWebSocketChannel(
       CONFIG.WEBSOCKET_CHANNELS.USER_UPDATES,
-      `${baseUrl}/ws/${CONFIG.WEBSOCKET_CHANNELS.USER_UPDATES}`,
+      `${baseUrl}/${userUpdatesUrl}`,
       this.handleUserUpdate.bind(this)
     );
 
     // Connect to chat messages channel
     await this.connectWebSocketChannel(
       CONFIG.WEBSOCKET_CHANNELS.CHAT_MESSAGES,
-      `${baseUrl}/ws/${CONFIG.WEBSOCKET_CHANNELS.CHAT_MESSAGES}`,
+      `${baseUrl}/${chatMessagesUrl}`,
       this.handleChatMessage.bind(this)
     );
+  }
+
+  private async getWebSocketURL(room: string): Promise<string> {
+    try {
+      const response = await this.makeRequest(`/api/getWebSocketURL?room=${room}`);
+      const data = await response.json();
+      return data.websocket_url;
+    } catch (error) {
+      console.error(`Error getting WebSocket URL for ${room}:`, error);
+      throw error;
+    }
   }
 
   private async connectWebSocketChannel(
