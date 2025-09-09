@@ -3,7 +3,7 @@ import { useGameStore } from '../store/gameStore';
 
 // ===== Constants =====
 const CONFIG = {
-  BASE_URL: import.meta.env.VITE_TAUBYTE_URL || window.location.origin,
+  BASE_URL: (import.meta as any).env?.VITE_TAUBYTE_URL || window.location.origin,
   API_ENDPOINTS: {
     PLACE_PIXEL: '/api/placePixel',
     JOIN_GAME: '/api/joinGame',
@@ -15,7 +15,8 @@ const CONFIG = {
     GET_WEBSOCKET_URL: '/api/getWebSocketURL',
     INIT_CANVAS: '/api/initCanvas'
   },
-  POLLING_INTERVAL: 2000, // Increased to 2 seconds for better performance
+  POLLING_INTERVAL: 5000, // 5 seconds for better performance
+  FAST_POLLING_INTERVAL: 1000, // 1 second when activity detected
   MAX_RETRIES: 3,
   RETRY_DELAY: 2000,
   CACHE_DURATION: 5000, // 5 seconds cache for canvas data
@@ -24,7 +25,7 @@ const CONFIG = {
 
 // ===== Types =====
 type EventType = 'pixelUpdate' | 'userJoin' | 'userLeave' | 'chatMessage' | 'connect' | 'disconnect' | 'error' | 'canvasUpdate' | 'userUpdate';
-type ConnectionMode = 'websocket' | 'polling';
+type ConnectionMode = 'websocket' | 'polling' | 'sse';
 
 interface CachedData {
   canvas: any;
@@ -38,13 +39,16 @@ class TaubyteService {
   private gameStore = useGameStore.getState();
   private currentUser: User | null = null;
   private isConnected = false;
-  private connectionMode: ConnectionMode = 'polling';
+  private connectionMode: ConnectionMode = 'websocket';
   
   // Connection management
-  private pollingInterval: NodeJS.Timeout | null = null;
+  private pollingInterval: number | null = null;
   private websocket: WebSocket | null = null;
+  private eventSource: EventSource | null = null;
   private retryCount = 0;
   private websocketAttempted = false;
+  private lastActivityTime = 0;
+  private isFastPolling = false;
   
   // Event system
   private eventListeners: Map<EventType, Function[]> = new Map();
@@ -59,7 +63,7 @@ class TaubyteService {
   
   // Performance optimization
   private lastMessageTimestamp = 0;
-  private pingInterval: NodeJS.Timeout | null = null;
+  private pingInterval: number | null = null;
   private requestQueue: Array<() => Promise<void>> = [];
   private isProcessingQueue = false;
 
@@ -192,6 +196,8 @@ class TaubyteService {
       
       if (this.connectionMode === 'websocket') {
         await this.connectWebSocket();
+      } else if (this.connectionMode === 'sse') {
+        await this.connectSSE();
       } else {
         this.startPolling();
       }
@@ -208,16 +214,30 @@ class TaubyteService {
     this.isConnected = false;
     this.stopPolling();
     this.disconnectWebSocket();
+    this.disconnectSSE();
     this.emit('disconnect');
     this.gameStore.setConnected(false);
   }
 
   // ===== Polling System =====
   private startPolling(): void {
+    // Don't start polling if WebSocket is active
+    if (this.websocket && this.websocket.readyState === WebSocket.OPEN) {
+      console.log('WebSocket is active, skipping polling');
+      return;
+    }
+    
     this.stopPolling();
     
-    this.pollingInterval = setInterval(async () => {
+    const poll = async () => {
       if (!this.isConnected) return;
+      
+      // Don't poll if WebSocket is active
+      if (this.websocket && this.websocket.readyState === WebSocket.OPEN) {
+        console.log('WebSocket became active, stopping polling');
+        this.stopPolling();
+        return;
+      }
 
       try {
         // Use request queue to prevent overwhelming the server
@@ -228,11 +248,46 @@ class TaubyteService {
             this.pollCanvas(),
           ]);
         });
+        
+        // Check if we should switch to fast polling
+        this.checkPollingSpeed();
       } catch (error) {
         console.error('Polling error:', error);
         this.handleConnectionError();
       }
-    }, CONFIG.POLLING_INTERVAL);
+    };
+    
+    // Initial poll
+    poll();
+    
+    // Set up adaptive polling
+    this.pollingInterval = setInterval(poll, this.getPollingInterval());
+  }
+  
+  private getPollingInterval(): number {
+    return this.isFastPolling ? CONFIG.FAST_POLLING_INTERVAL : CONFIG.POLLING_INTERVAL;
+  }
+  
+  private checkPollingSpeed(): void {
+    const now = Date.now();
+    const timeSinceActivity = now - this.lastActivityTime;
+    
+    // If there was recent activity (within 10 seconds), use fast polling
+    const shouldUseFastPolling = timeSinceActivity < 10000;
+    
+    if (shouldUseFastPolling !== this.isFastPolling) {
+      this.isFastPolling = shouldUseFastPolling;
+      console.log(`Switching to ${this.isFastPolling ? 'fast' : 'normal'} polling`);
+      
+      // Restart polling with new interval
+      if (this.connectionMode === 'polling') {
+        this.startPolling();
+      }
+    }
+  }
+  
+  private recordActivity(): void {
+    this.lastActivityTime = Date.now();
   }
 
   private stopPolling(): void {
@@ -396,6 +451,8 @@ class TaubyteService {
       throw new Error('Not connected or user not logged in');
     }
 
+    this.recordActivity(); // Record user activity for adaptive polling
+
     try {
       await this.sendPixelUpdate(x, y, color);
       
@@ -481,6 +538,8 @@ class TaubyteService {
       throw new Error('Not connected or user not logged in');
     }
 
+    this.recordActivity(); // Record user activity for adaptive polling
+
     await this.makeRequest(CONFIG.API_ENDPOINTS.SEND_MESSAGE, {
       method: 'POST',
       body: JSON.stringify({ message }),
@@ -560,6 +619,10 @@ class TaubyteService {
         this.websocket?.send(JSON.stringify(subscribeMsg));
         
         this.startPingInterval();
+        
+        // Stop polling since WebSocket is working
+        this.stopPolling();
+        console.log('WebSocket active - polling disabled');
       };
 
       this.websocket.onmessage = (event) => {
@@ -602,6 +665,81 @@ class TaubyteService {
     if (this.websocket) {
       this.websocket.close();
       this.websocket = null;
+    }
+  }
+
+  // ===== Server-Sent Events (SSE) Management =====
+  private async connectSSE(): Promise<void> {
+    try {
+      const sseUrl = `${CONFIG.BASE_URL}/api/events?room=pixelcollab`;
+      console.log('Connecting to Server-Sent Events:', sseUrl);
+      
+      this.eventSource = new EventSource(sseUrl);
+      
+      this.eventSource.onopen = () => {
+        console.log('SSE connection established');
+        this.emit('connect');
+        this.stopPolling();
+      };
+      
+      this.eventSource.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          this.handleSSEMessage(data);
+        } catch (error) {
+          console.error('Error parsing SSE message:', error);
+        }
+      };
+      
+      this.eventSource.onerror = (error) => {
+        console.error('SSE error:', error);
+        this.emit('error', error);
+        this.disconnectSSE();
+        
+        // Fallback to polling
+        console.log('SSE failed, switching to polling mode');
+        this.connectionMode = 'polling';
+        this.startPolling();
+      };
+      
+    } catch (error) {
+      console.log('SSE not available, using polling mode:', error);
+      this.connectionMode = 'polling';
+      this.startPolling();
+      this.emit('connect');
+    }
+  }
+  
+  private disconnectSSE(): void {
+    if (this.eventSource) {
+      this.eventSource.close();
+      this.eventSource = null;
+    }
+  }
+  
+  private handleSSEMessage(data: any): void {
+    switch (data.type) {
+      case 'pixelUpdate':
+        this.emit('pixelUpdate', data.payload);
+        this.gameStore.updatePixel(data.payload.x, data.payload.y, data.payload.color, data.payload.userId);
+        break;
+        
+      case 'userUpdate':
+        this.emit('userUpdate', data.payload);
+        if (data.payload.isOnline) {
+          this.gameStore.addUser(data.payload);
+        } else {
+          this.gameStore.removeUser(data.payload.id);
+        }
+        break;
+        
+      case 'chatMessage':
+        this.emit('chatMessage', data.payload);
+        this.gameStore.addChatMessage(data.payload);
+        break;
+        
+      default:
+        console.log('Unknown SSE message type:', data.type, data);
     }
   }
 
@@ -675,15 +813,52 @@ class TaubyteService {
       this.connectWebSocket();
     }
   }
+  
+  // Force WebSocket mode and disable polling completely
+  forceWebSocketMode(): void {
+    this.connectionMode = 'websocket';
+    this.websocketAttempted = false;
+    this.stopPolling();
+    console.log('Forced WebSocket mode - polling disabled');
+    
+    if (this.isConnected) {
+      this.connectWebSocket();
+    }
+  }
 
   disableWebSocket(): void {
     if (this.connectionMode === 'polling') return;
     
     this.connectionMode = 'polling';
     this.disconnectWebSocket();
+    this.disconnectSSE();
     
     if (this.isConnected) {
       this.startPolling();
+    }
+  }
+  
+  enableSSE(): void {
+    if (this.connectionMode === 'sse') return;
+    
+    this.connectionMode = 'sse';
+    this.websocketAttempted = false;
+    this.stopPolling();
+    this.disconnectWebSocket();
+    
+    if (this.isConnected) {
+      this.connectSSE();
+    }
+  }
+  
+  disableSSE(): void {
+    if (this.connectionMode === 'sse') {
+      this.connectionMode = 'polling';
+      this.disconnectSSE();
+      
+      if (this.isConnected) {
+        this.startPolling();
+      }
     }
   }
 
