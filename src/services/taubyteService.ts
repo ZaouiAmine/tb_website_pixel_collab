@@ -81,7 +81,7 @@ class TaubyteService {
   private async getWebSocketURLs(): Promise<void> {
     const promises = Object.entries(CONFIG.WEBSOCKET_CHANNELS).map(async ([, channelName]) => {
       try {
-        const response = await fetch(`${CONFIG.BASE_URL}/api/getWebSocketURL?channel=${channelName}`);
+        const response = await fetch(`${CONFIG.BASE_URL}/api/getWebSocketURL?room=${channelName}`);
         if (!response.ok) {
           throw new Error(`Failed to get WebSocket URL for ${channelName}: ${response.status}`);
         }
@@ -89,8 +89,8 @@ class TaubyteService {
         const data = await response.json();
         const channel = this.channels.get(channelName);
         if (channel) {
-          channel.url = data.url;
-          console.log(`📡 Got WebSocket URL for ${channelName}:`, data.url);
+          channel.url = data.websocket_url;
+          console.log(`📡 Got WebSocket URL for ${channelName}:`, data.websocket_url);
         }
       } catch (error) {
         console.error(`❌ Error getting WebSocket URL for ${channelName}:`, error);
@@ -161,9 +161,9 @@ class TaubyteService {
     if (!channel) return;
 
     try {
-      const response = await fetch(`${CONFIG.BASE_URL}/api/getWebSocketURL?channel=${channelName}`);
+      const response = await fetch(`${CONFIG.BASE_URL}/api/getWebSocketURL?room=${channelName}`);
       const data = await response.json();
-      channel.url = data.url;
+      channel.url = data.websocket_url;
 
       const ws = new WebSocket(channel.url);
       channel.ws = ws;
