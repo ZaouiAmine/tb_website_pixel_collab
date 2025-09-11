@@ -3,6 +3,7 @@ export interface Pixel {
   y: number;
   color: string;
   userId: string;
+  username?: string;
   timestamp: number;
 }
 

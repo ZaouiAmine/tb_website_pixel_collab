@@ -619,19 +619,30 @@ class TaubyteService {
       // Process users
       if (users.status === 'fulfilled' && Array.isArray(users.value)) {
         console.log(`👥 Loaded ${users.value.length} existing users`);
+        console.log('👥 First user:', users.value[0]);
         users.value.forEach(user => this.gameStore.addUser(user));
+      } else {
+        console.log('👥 Users status:', users.status, 'Value:', users.status === 'rejected' ? users.reason : 'unknown');
       }
 
       // Process messages
       if (messages.status === 'fulfilled' && Array.isArray(messages.value)) {
         console.log(`💬 Loaded ${messages.value.length} existing messages`);
+        console.log('💬 First message:', messages.value[0]);
         this.gameStore.setChatMessages(messages.value);
+      } else {
+        console.log('💬 Messages status:', messages.status, 'Value:', messages.status === 'rejected' ? messages.reason : 'unknown');
       }
 
       // Process canvas
       if (canvas.status === 'fulfilled' && canvas.value) {
-        console.log('🎨 Loaded existing canvas');
-        this.emit('canvasUpdate', canvas.value);
+        console.log('🎨 Loaded existing canvas:', canvas.value);
+        console.log('🎨 Canvas type:', typeof canvas.value, 'Array?', Array.isArray(canvas.value));
+        if (Array.isArray(canvas.value) && canvas.value.length > 0) {
+          console.log('🎨 First row:', canvas.value[0]);
+          console.log('🎨 First pixel:', canvas.value[0]?.[0]);
+        }
+        this.gameStore.setCanvas(canvas.value);
       }
 
       console.log('✅ Initial data loading completed');
@@ -727,7 +738,7 @@ class TaubyteService {
     try {
       const canvas = await this.getCanvas();
       if (canvas) {
-        this.emit('canvasUpdate', canvas);
+        this.gameStore.setCanvas(canvas);
       }
       // Silently ignore null responses (API errors are already logged in getCanvas)
     } catch (error) {
