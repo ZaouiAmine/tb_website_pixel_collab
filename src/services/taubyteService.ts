@@ -63,6 +63,9 @@ class TaubyteService {
   private pixelQueue: PixelQueueItem[] = [];
   private isProcessingPixelQueue = false;
   
+  // Message deduplication
+  private processedMessageIds: Set<string> = new Set();
+  
   // Connection state
   private isReconnecting = false;
 
@@ -173,10 +176,14 @@ class TaubyteService {
 
   private async connectAllChannels(): Promise<void> {
     const connectionPromises = Array.from(this.channels.entries()).map(([channelName, channel]) =>
-      this.connectChannel(channelName, channel)
+      this.connectChannel(channelName, channel).catch(error => {
+        console.error(`Failed to connect to ${channelName}:`, error);
+        // Don't throw - let other channels connect
+        return null;
+      })
     );
     
-    await Promise.all(connectionPromises);
+    await Promise.allSettled(connectionPromises);
   }
 
   private async connectChannel(channelName: string, channel: WebSocketChannel): Promise<void> {
@@ -207,7 +214,10 @@ class TaubyteService {
 
         ws.onerror = (error) => {
           console.error(`❌ WebSocket error for ${channelName}:`, error);
-          reject(error);
+          // Don't reject on error during initial connection - let it retry
+          if (channel.connected) {
+            reject(error);
+          }
         };
 
       } catch (error) {
@@ -349,7 +359,18 @@ class TaubyteService {
   }
 
   private handleUserUpdate(user: any): void {
+    // Check for duplicate user updates (same user, same timestamp)
+    const userKey = `${user.id}_${user.lastSeen}`;
+    if (this.processedMessageIds.has(userKey)) {
+      console.log('🔄 Duplicate user update ignored:', userKey);
+      return;
+    }
+    
     console.log('👤 Received user update:', user);
+    
+    // Add to processed messages set
+    this.processedMessageIds.add(userKey);
+    
     if (user.isOnline) {
       this.gameStore.addUser(user);
       this.emit('userJoin', user);
@@ -360,7 +381,26 @@ class TaubyteService {
   }
 
   private handleChatMessage(message: any): void {
+    // Check for duplicate messages
+    if (message.id && this.processedMessageIds.has(message.id)) {
+      console.log('🔄 Duplicate chat message ignored:', message.id);
+      return;
+    }
+    
     console.log('💬 Received chat message:', message);
+    
+    // Add to processed messages set
+    if (message.id) {
+      this.processedMessageIds.add(message.id);
+      // Clean up old message IDs to prevent memory leaks
+      if (this.processedMessageIds.size > 1000) {
+        const idsArray = Array.from(this.processedMessageIds);
+        this.processedMessageIds.clear();
+        // Keep only the most recent 500 IDs
+        idsArray.slice(-500).forEach(id => this.processedMessageIds.add(id));
+      }
+    }
+    
     this.gameStore.addChatMessage(message);
     this.emit('chatMessage', message);
   }
@@ -554,7 +594,8 @@ class TaubyteService {
       return await response.json();
     } catch (error) {
       console.error('Error fetching canvas:', error);
-      throw error;
+      // Return null instead of throwing to prevent polling failures
+      return null;
     }
   }
 
@@ -578,6 +619,9 @@ class TaubyteService {
         return data;
       } else if (data && Array.isArray(data.messages)) {
         return data.messages;
+      } else if (data === null || data === undefined) {
+        // API returns null when no messages exist - this is normal
+        return [];
       } else {
         console.warn('Unexpected messages response format:', data);
         return [];
@@ -621,6 +665,7 @@ class TaubyteService {
       if (canvas) {
         this.emit('canvasUpdate', canvas);
       }
+      // Silently ignore null responses (API errors are already logged in getCanvas)
     } catch (error) {
       console.error('Error polling canvas:', error);
     }
