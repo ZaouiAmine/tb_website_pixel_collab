@@ -72,10 +72,37 @@ class TaubyteService {
       console.log('✅ Successfully connected to all channels');
     } catch (error) {
       console.error('❌ Failed to connect:', error);
-      throw error;
+      // Don't throw error, let the app continue with partial functionality
+      this.handleConnectionError(error);
     } finally {
       this.isConnecting = false;
     }
+  }
+
+  disconnect(): void {
+    console.log('🔌 Disconnecting from all channels...');
+    this.channels.forEach((channel, channelName) => {
+      if (channel.ws) {
+        console.log(`🔌 Closing connection to ${channelName}`);
+        channel.ws.close();
+        channel.ws = null;
+        channel.connected = false;
+      }
+    });
+
+    if (this.pixelDebounceTimeout) {
+      clearTimeout(this.pixelDebounceTimeout);
+      this.pixelDebounceTimeout = null;
+    }
+  }
+
+  private handleConnectionError(error: unknown): void {
+    // Log the error for debugging
+    console.error('Connection error details:', error);
+    
+    // You could emit an event here to notify the UI about connection issues
+    // For now, we'll just log it and continue
+    console.warn('⚠️ Some features may not work due to connection issues');
   }
 
   private async getWebSocketURLs(): Promise<void> {
@@ -154,8 +181,16 @@ class TaubyteService {
     channel.reconnectAttempts++;
     console.log(`🔄 Reconnecting to ${channelName} (attempt ${channel.reconnectAttempts})...`);
     
+    // Clear any existing WebSocket connection
+    if (channel.ws) {
+      channel.ws.close();
+      channel.ws = null;
+    }
+    
     setTimeout(() => {
-      this.connectToChannel(channelName);
+      this.connectToChannel(channelName).catch(error => {
+        console.error(`❌ Failed to reconnect to ${channelName}:`, error);
+      });
     }, CONFIG.RECONNECT_DELAY);
   }
 
@@ -165,7 +200,13 @@ class TaubyteService {
 
     try {
       const response = await fetch(`${CONFIG.BASE_URL}/api/getWebSocketURL?room=${channelName}`);
+      if (!response.ok) {
+        throw new Error(`Failed to get WebSocket URL: ${response.status}`);
+      }
       const data = await response.json();
+      if (!data.websocket_url) {
+        throw new Error('No WebSocket URL in response');
+      }
       channel.url = data.websocket_url;
 
       const ws = new WebSocket(channel.url);
@@ -234,39 +275,46 @@ class TaubyteService {
       console.log('✅ Initial state loaded successfully');
     } catch (error) {
       console.error('❌ Failed to load initial state:', error);
-      throw error;
+      // Don't throw error, continue with empty state
+      console.warn('⚠️ Starting with empty state due to loading failure');
     }
   }
 
   // ===== API Methods =====
-  private async makeRequest(endpoint: string, options: RequestInit = {}): Promise<any> {
+  private async makeRequest(endpoint: string, options: RequestInit = {}): Promise<unknown> {
     const url = `${CONFIG.BASE_URL}${endpoint}`;
     
-    const response = await fetch(url, {
-      ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        ...options.headers,
-      },
-    });
+    try {
+      const response = await fetch(url, {
+        ...options,
+        headers: {
+          'Content-Type': 'application/json',
+          ...options.headers,
+        },
+      });
 
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => 'Unknown error');
+        throw new Error(`HTTP ${response.status}: ${response.statusText} - ${errorText}`);
+      }
+
+      return response.json();
+    } catch (error) {
+      console.error(`API request failed for ${endpoint}:`, error);
+      throw error;
     }
-
-    return response.json();
   }
 
   async getCanvas(): Promise<Pixel[][]> {
-    return this.makeRequest(CONFIG.API_ENDPOINTS.GET_CANVAS);
+    return this.makeRequest(CONFIG.API_ENDPOINTS.GET_CANVAS) as Promise<Pixel[][]>;
   }
 
   async getUsers(): Promise<User[]> {
-    return this.makeRequest(CONFIG.API_ENDPOINTS.GET_USERS);
+    return this.makeRequest(CONFIG.API_ENDPOINTS.GET_USERS) as Promise<User[]>;
   }
 
   async getMessages(): Promise<ChatMessage[]> {
-    return this.makeRequest(CONFIG.API_ENDPOINTS.GET_MESSAGES);
+    return this.makeRequest(CONFIG.API_ENDPOINTS.GET_MESSAGES) as Promise<ChatMessage[]>;
   }
 
   async initializeCanvas(): Promise<void> {
@@ -379,23 +427,7 @@ class TaubyteService {
   }
 
   // ===== Disconnection =====
-  disconnect(): void {
-    console.log('🔌 Disconnecting from all channels...');
-    
-    this.channels.forEach((channel, channelName) => {
-      if (channel.ws) {
-        console.log(`🔌 Closing ${channelName} connection`);
-        channel.ws.close();
-        channel.ws = null;
-        channel.connected = false;
-      }
-    });
-
-    if (this.pixelDebounceTimeout) {
-      clearTimeout(this.pixelDebounceTimeout);
-      this.pixelDebounceTimeout = null;
-    }
-  }
+  // disconnect method is already defined above
 }
 
 // ===== Export =====

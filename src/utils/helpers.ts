@@ -125,7 +125,7 @@ export const removeFromStorage = (key: string): void => {
 };
 
 // Debounce utility
-export const debounce = <T extends (...args: any[]) => any>(
+export const debounce = <T extends (...args: unknown[]) => unknown>(
   func: T,
   delay: number
 ): ((...args: Parameters<T>) => void) => {
@@ -137,7 +137,7 @@ export const debounce = <T extends (...args: any[]) => any>(
 };
 
 // Throttle utility
-export const throttle = <T extends (...args: any[]) => any>(
+export const throttle = <T extends (...args: unknown[]) => unknown>(
   func: T,
   delay: number
 ): ((...args: Parameters<T>) => void) => {
@@ -196,17 +196,26 @@ export const buildApiUrl = (endpoint: string): string => {
 export const createError = (message: string, code?: string): Error => {
   const error = new Error(message);
   if (code) {
-    (error as any).code = code;
+    (error as Error & { code?: string }).code = code;
   }
   return error;
 };
 
-export const handleApiError = (error: any): string => {
-  if (error.response?.data?.message) {
-    return error.response.data.message;
-  } else if (error.message) {
-    return error.message;
-  } else {
-    return 'An unexpected error occurred';
+export const handleApiError = (error: unknown): string => {
+  if (error && typeof error === 'object') {
+    const err = error as Record<string, unknown>;
+    if (err.response && typeof err.response === 'object') {
+      const response = err.response as Record<string, unknown>;
+      if (response.data && typeof response.data === 'object') {
+        const data = response.data as Record<string, unknown>;
+        if (typeof data.message === 'string') {
+          return data.message;
+        }
+      }
+    }
+    if (typeof err.message === 'string') {
+      return err.message;
+    }
   }
+  return 'An unexpected error occurred';
 };
