@@ -38,6 +38,23 @@ export const sanitizeUsername = (username: string): string => {
   return username.trim().replace(/[^a-zA-Z0-9_-]/g, '').substring(0, GAME_CONFIG.MAX_USERNAME_LENGTH);
 };
 
+export const sanitizeMessage = (message: string): string => {
+  // Basic XSS protection - remove script tags and dangerous characters
+  let sanitized = message.trim();
+  
+  // Remove potential script tags
+  sanitized = sanitized.replace(/<script[^>]*>.*?<\/script>/gi, '');
+  sanitized = sanitized.replace(/javascript:/gi, '');
+  sanitized = sanitized.replace(/on\w+\s*=/gi, '');
+  
+  // Limit length
+  if (sanitized.length > 500) {
+    sanitized = sanitized.substring(0, 500);
+  }
+  
+  return sanitized;
+};
+
 // Time utilities
 export const formatTime = (timestamp: number): string => {
   return new Date(timestamp).toLocaleTimeString([], { 

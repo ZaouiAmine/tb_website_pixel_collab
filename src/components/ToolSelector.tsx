@@ -3,7 +3,7 @@ import { useGameStore } from '../store/gameStore';
 import type { Tool } from '../types/game';
 import { Pencil, Eraser, Eye, PaintBucket } from 'lucide-react';
 
-const TOOLS: { tool: Tool; icon: React.ComponentType<any>; label: string }[] = [
+const TOOLS: { tool: Tool; icon: React.ComponentType<{ className?: string }>; label: string }[] = [
   { tool: 'pencil', icon: Pencil, label: 'Pencil' },
   { tool: 'eraser', icon: Eraser, label: 'Eraser' },
   { tool: 'eyedropper', icon: Eye, label: 'Eyedropper' },

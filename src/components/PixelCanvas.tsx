@@ -51,17 +51,29 @@ export const PixelCanvas: React.FC<PixelCanvasProps> = ({ className = '' }) => {
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, canvasElement.width, canvasElement.height);
 
-    // Draw pixels with optimized rendering
+    // Draw pixels with optimized rendering - batch similar colors
     ctx.save();
+    const colorGroups: { [color: string]: { x: number; y: number }[] } = {};
+    
     for (let y = 0; y < canvasSize.height; y++) {
       for (let x = 0; x < canvasSize.width; x++) {
         const pixel = canvas[y]?.[x];
-        if (pixel && pixel.userId) {
-          ctx.fillStyle = pixel.color;
-          ctx.fillRect(x * canvasDimensions.pixelSize, y * canvasDimensions.pixelSize, canvasDimensions.pixelSize, canvasDimensions.pixelSize);
+        if (pixel && pixel.userId && pixel.color !== '#ffffff') {
+          if (!colorGroups[pixel.color]) {
+            colorGroups[pixel.color] = [];
+          }
+          colorGroups[pixel.color].push({ x, y });
         }
       }
     }
+
+    // Draw pixels by color groups for better performance
+    Object.entries(colorGroups).forEach(([color, pixels]) => {
+      ctx.fillStyle = color;
+      pixels.forEach(({ x, y }) => {
+        ctx.fillRect(x * canvasDimensions.pixelSize, y * canvasDimensions.pixelSize, canvasDimensions.pixelSize, canvasDimensions.pixelSize);
+      });
+    });
     ctx.restore();
 
     // Draw grid with optimized rendering

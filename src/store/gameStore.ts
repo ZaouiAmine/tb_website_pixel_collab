@@ -71,7 +71,13 @@ export const useGameStore = create<GameStore>((set, get) => ({
   // ===== Canvas Management =====
   updatePixel: (x, y, color, userId) => {
     const { canvas } = get();
-    if (x >= 0 && x < canvas[0]?.length && y >= 0 && y < canvas.length) {
+    if (canvas && canvas.length > 0 && canvas[0] && x >= 0 && x < canvas[0].length && y >= 0 && y < canvas.length) {
+      // Check if pixel actually changed to avoid unnecessary updates
+      const currentPixel = canvas[y][x];
+      if (currentPixel.color === color && currentPixel.userId === userId) {
+        return; // No change needed
+      }
+
       // Create new canvas with updated pixel (immutable update)
       const newCanvas = canvas.map((row, rowIndex) => {
         if (rowIndex === y) {

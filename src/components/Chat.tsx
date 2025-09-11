@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useGameStore } from '../store/gameStore';
 import { taubyteService } from '../services/taubyteService';
+import { sanitizeMessage } from '../utils/helpers';
 import { MessageCircle, Send } from 'lucide-react';
 
 export const Chat: React.FC = () => {
@@ -35,8 +36,12 @@ export const Chat: React.FC = () => {
     e.preventDefault();
     if (!newMessage.trim() || !currentUser) return;
 
+    // Sanitize message before sending
+    const sanitizedMessage = sanitizeMessage(newMessage);
+    if (!sanitizedMessage) return;
+
     // Send message to server - it will be added to chat via polling
-    taubyteService.sendChatMessage(newMessage.trim()).catch(error => {
+    taubyteService.sendChatMessage(sanitizedMessage).catch(error => {
       console.error('Failed to send message:', error);
     });
     setNewMessage('');

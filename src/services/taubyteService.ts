@@ -8,7 +8,8 @@ const CONFIG = {
     GET_CANVAS: '/api/getCanvas',
     GET_USERS: '/api/getUsers',
     GET_MESSAGES: '/api/getMessages',
-    INIT_CANVAS: '/api/initCanvas'
+    INIT_CANVAS: '/api/initCanvas',
+    RESET_CANVAS: '/api/resetCanvas'
   },
   WEBSOCKET_CHANNELS: {
     PIXEL_UPDATES: 'pixelupdates',
@@ -56,12 +57,13 @@ class TaubyteService {
   private heartbeatInterval: NodeJS.Timeout | null = null;
   
   // Event system
-  private eventListeners: Map<EventType, Function[]> = new Map();
+  private eventListeners: Map<EventType, ((data?: any) => void)[]> = new Map();
   
   // Rate limiting and queuing
   private lastPixelTime = 0;
   private pixelQueue: PixelQueueItem[] = [];
   private isProcessingPixelQueue = false;
+  private pixelDebounceTimeout: NodeJS.Timeout | null = null;
   
   // Connection state
   private isReconnecting = false;
@@ -82,13 +84,13 @@ class TaubyteService {
     });
   }
 
-  on(event: EventType, callback: Function): void {
+  on(event: EventType, callback: (data?: any) => void): void {
     const listeners = this.eventListeners.get(event) || [];
     listeners.push(callback);
     this.eventListeners.set(event, listeners);
   }
 
-  off(event: EventType, callback: Function): void {
+  off(event: EventType, callback: (data?: any) => void): void {
     const listeners = this.eventListeners.get(event) || [];
     const index = listeners.indexOf(callback);
     if (index > -1) {
@@ -311,7 +313,7 @@ class TaubyteService {
       let messageData;
       try {
         messageData = JSON.parse(data);
-      } catch (parseError) {
+      } catch {
         console.log(`📨 Non-JSON message from ${channelName}:`, data);
         return;
       }
@@ -452,6 +454,11 @@ class TaubyteService {
       throw new Error('Not connected or user not logged in');
     }
 
+    // Clear any existing debounce timeout
+    if (this.pixelDebounceTimeout) {
+      clearTimeout(this.pixelDebounceTimeout);
+    }
+
     // Add to queue for rate limiting
     const pixelItem: PixelQueueItem = {
       x, y, color, timestamp: Date.now()
@@ -459,10 +466,13 @@ class TaubyteService {
 
     this.pixelQueue.push(pixelItem);
     
-    // Process queue if not already processing
-    if (!this.isProcessingPixelQueue) {
-      this.processPixelQueue();
-    }
+    // Debounce pixel placement to reduce server load
+    this.pixelDebounceTimeout = setTimeout(() => {
+      // Process queue if not already processing
+      if (!this.isProcessingPixelQueue) {
+        this.processPixelQueue();
+      }
+    }, 50); // 50ms debounce
   }
 
   private async processPixelQueue(): Promise<void> {
@@ -614,6 +624,17 @@ class TaubyteService {
     }
   }
 
+  async resetCanvas(): Promise<void> {
+    try {
+      await this.makeRequest(CONFIG.API_ENDPOINTS.RESET_CANVAS, {
+        method: 'POST',
+      });
+    } catch (error) {
+      console.error('Error resetting canvas:', error);
+      throw error;
+    }
+  }
+
   async getCanvas(): Promise<any> {
     try {
       const response = await this.makeRequest(CONFIG.API_ENDPOINTS.GET_CANVAS);
@@ -716,16 +737,34 @@ class TaubyteService {
       (headers as any)['X-User-ID'] = this.currentUser.id;
     }
 
-    const response = await fetch(url, {
-      ...options,
-      headers,
-    });
+    try {
+      const response = await fetch(url, {
+        ...options,
+        headers,
+        // Add timeout to prevent hanging requests
+        signal: AbortSignal.timeout(10000), // 10 second timeout
+      });
 
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => 'Unknown error');
+        throw new Error(`HTTP ${response.status}: ${response.statusText} - ${errorText}`);
+      }
+
+      return response;
+    } catch (error) {
+      console.error(`Request failed for ${endpoint}:`, error);
+      
+      // Provide more specific error messages
+      if (error instanceof Error) {
+        if (error.name === 'AbortError') {
+          throw new Error('Request timeout - server is not responding');
+        } else if (error.message.includes('Failed to fetch')) {
+          throw new Error('Network error - check your connection');
+        }
+      }
+      
+      throw error;
     }
-
-    return response;
   }
 
   // ===== Utility Methods =====

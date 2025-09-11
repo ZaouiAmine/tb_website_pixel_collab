@@ -1,17 +1,18 @@
 import React from 'react';
 import { useGameStore } from '../store/gameStore';
+import type { User } from '../types/game';
 import { Users, Wifi, WifiOff } from 'lucide-react';
 
 export const UserList: React.FC = () => {
   const { users, currentUser, isConnected } = useGameStore();
 
-  const getStatusColor = (user: any) => {
+  const getStatusColor = (user: User) => {
     if (!user.isOnline) return 'text-gray-500';
     if (user.id === currentUser?.id) return 'text-pixel-accent';
     return 'text-pixel-text';
   };
 
-  const getStatusIcon = (user: any) => {
+  const getStatusIcon = (user: User) => {
     if (!user.isOnline) return <WifiOff className="w-3 h-3" />;
     return <Wifi className="w-3 h-3" />;
   };
