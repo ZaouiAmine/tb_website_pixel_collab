@@ -186,28 +186,59 @@ class TaubyteService {
     try {
       console.log('📥 Loading initial state from server...');
       
+      // Try to initialize canvas first if it doesn't exist
+      try {
+        await this.initializeCanvas();
+        console.log('✅ Canvas initialized');
+      } catch (error) {
+        console.log('Canvas initialization failed (may already exist):', error);
+      }
+      
       // Load canvas state
-      const canvas = await this.getCanvas();
-      if (canvas) {
-        this.gameStore.setCanvas(canvas);
-        console.log('✅ Canvas state loaded');
+      try {
+        const canvas = await this.getCanvas();
+        if (canvas) {
+          this.gameStore.setCanvas(canvas);
+          console.log('✅ Canvas state loaded');
+        }
+      } catch (error) {
+        console.error('❌ Failed to load canvas state:', error);
+        // Try to initialize canvas and retry once
+        try {
+          await this.initializeCanvas();
+          const canvas = await this.getCanvas();
+          if (canvas) {
+            this.gameStore.setCanvas(canvas);
+            console.log('✅ Canvas state loaded after initialization');
+          }
+        } catch (retryError) {
+          console.error('❌ Failed to load canvas even after initialization:', retryError);
+        }
       }
       
       // Load users
-      const users = await this.getUsers();
-      if (users) {
-        users.forEach(user => this.gameStore.addUser(user));
-        console.log('✅ Users loaded:', users.length);
+      try {
+        const users = await this.getUsers();
+        if (users) {
+          users.forEach(user => this.gameStore.addUser(user));
+          console.log('✅ Users loaded:', users.length);
+        }
+      } catch (error) {
+        console.error('❌ Failed to load users:', error);
       }
       
       // Load messages
-      const messages = await this.getMessages();
-      if (messages) {
-        this.gameStore.setChatMessages(messages);
-        console.log('✅ Messages loaded:', messages.length);
+      try {
+        const messages = await this.getMessages();
+        if (messages) {
+          this.gameStore.setChatMessages(messages);
+          console.log('✅ Messages loaded:', messages.length);
+        }
+      } catch (error) {
+        console.error('❌ Failed to load messages:', error);
       }
       
-      console.log('✅ Initial state loaded successfully');
+      console.log('✅ Initial state loading completed');
     } catch (error) {
       console.error('❌ Failed to load initial state:', error);
       // Don't throw error - allow connection to continue even if initial state fails
