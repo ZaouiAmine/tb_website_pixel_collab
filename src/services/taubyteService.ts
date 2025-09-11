@@ -571,10 +571,20 @@ class TaubyteService {
   async getMessages(): Promise<ChatMessage[]> {
     try {
       const response = await this.makeRequest(CONFIG.API_ENDPOINTS.GET_MESSAGES);
-      return await response.json();
+      const data = await response.json();
+      
+      // Handle different response formats
+      if (Array.isArray(data)) {
+        return data;
+      } else if (data && Array.isArray(data.messages)) {
+        return data.messages;
+      } else {
+        console.warn('Unexpected messages response format:', data);
+        return [];
+      }
     } catch (error) {
       console.error('Error fetching messages:', error);
-      throw error;
+      return []; // Return empty array instead of throwing
     }
   }
 

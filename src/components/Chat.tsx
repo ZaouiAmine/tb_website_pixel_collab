@@ -36,15 +36,18 @@ export const Chat: React.FC = () => {
     // Load existing messages on component mount
     const loadMessages = async () => {
       try {
-        const response = await fetch(`${import.meta.env.VITE_TAUBYTE_URL || window.location.origin}/api/getMessages`);
-        const data = await response.json();
-        if (data.messages) {
+        const messages = await taubyteService.getMessages();
+        if (Array.isArray(messages)) {
           // Sort messages by timestamp to maintain chronological order
-          const sortedMessages = data.messages.sort((a: ChatMessage, b: ChatMessage) => a.timestamp - b.timestamp);
+          const sortedMessages = messages.sort((a: ChatMessage, b: ChatMessage) => a.timestamp - b.timestamp);
           setMessages(sortedMessages);
+        } else {
+          console.log('No messages found or invalid response format');
+          setMessages([]);
         }
       } catch (error) {
         console.error('Failed to load messages:', error);
+        setMessages([]);
       }
     };
 
