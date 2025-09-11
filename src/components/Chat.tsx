@@ -2,11 +2,9 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useGameStore } from '../store/gameStore';
 import { taubyteService } from '../services/taubyteService';
 import { MessageCircle, Send } from 'lucide-react';
-import type { ChatMessage } from '../types/game';
 
 export const Chat: React.FC = () => {
-  const { currentUser } = useGameStore();
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const { currentUser, messages } = useGameStore();
   const [newMessage, setNewMessage] = useState('');
   const [isExpanded, setIsExpanded] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -21,37 +19,11 @@ export const Chat: React.FC = () => {
 
   // Listen to chat messages from the service
   useEffect(() => {
-    const handleChatMessage = (message: ChatMessage) => {
-      setMessages(prev => {
-        // Avoid duplicates by checking message ID
-        if (prev.find(m => m.id === message.id)) {
-          return prev;
-        }
-        // Sort messages by timestamp to maintain chronological order
-        const newMessages = [...prev, message].sort((a, b) => a.timestamp - b.timestamp);
-        return newMessages;
-      });
+    const handleChatMessage = () => {
+      // Messages are now handled by the global store via taubyteService
+      // This listener is kept for any additional UI updates if needed
     };
 
-    // Load existing messages on component mount
-    const loadMessages = async () => {
-      try {
-        const messages = await taubyteService.getMessages();
-        if (Array.isArray(messages)) {
-          // Sort messages by timestamp to maintain chronological order
-          const sortedMessages = messages.sort((a: ChatMessage, b: ChatMessage) => a.timestamp - b.timestamp);
-          setMessages(sortedMessages);
-        } else {
-          console.log('No messages found or invalid response format');
-          setMessages([]);
-        }
-      } catch (error) {
-        console.error('Failed to load messages:', error);
-        setMessages([]);
-      }
-    };
-
-    loadMessages();
     taubyteService.on('chatMessage', handleChatMessage);
 
     return () => {

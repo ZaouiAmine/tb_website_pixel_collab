@@ -25,7 +25,6 @@ export interface GameState {
   isConnected: boolean;
   canvasSize: { width: number; height: number };
   pixelSize: number;
-  maxPixelsPerUser: number;
 }
 
 export type Tool = 'pencil' | 'eraser' | 'eyedropper' | 'bucket';

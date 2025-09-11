@@ -4,7 +4,6 @@ import type { GameState, User, Pixel, Tool, ChatMessage } from '../types/game';
 // ===== Constants =====
 const DEFAULT_CANVAS_SIZE = { width: 100, height: 100 };
 const DEFAULT_PIXEL_SIZE = 8;
-const DEFAULT_MAX_PIXELS_PER_USER = 1000;
 // const MAX_CHAT_MESSAGES = 100; // Reserved for future chat implementation
 
 // ===== Types =====
@@ -19,11 +18,11 @@ interface GameStore extends GameState {
   removeUser: (userId: string) => void;
   updateUser: (userId: string, updates: Partial<User>) => void;
   addChatMessage: (message: ChatMessage) => void;
+  setChatMessages: (messages: ChatMessage[]) => void;
   clearCanvas: () => void;
   initializeCanvas: (width: number, height: number) => void;
   setCanvasSize: (width: number, height: number) => void;
   setPixelSize: (size: number) => void;
-  setMaxPixelsPerUser: (max: number) => void;
   setCanvas: (canvas: Pixel[][]) => void;
   reset: () => void;
 }
@@ -59,7 +58,6 @@ export const useGameStore = create<GameStore>((set, get) => ({
   isConnected: false,
   canvasSize: DEFAULT_CANVAS_SIZE,
   pixelSize: DEFAULT_PIXEL_SIZE,
-  maxPixelsPerUser: DEFAULT_MAX_PIXELS_PER_USER,
 
   // ===== User Management =====
   setCurrentUser: (user) => set({ currentUser: user }),
@@ -158,7 +156,14 @@ export const useGameStore = create<GameStore>((set, get) => ({
   // ===== Chat Management =====
   addChatMessage: (message) => {
     const { messages } = get();
-    const newMessages = [...messages, message];
+    
+    // Check for duplicates
+    if (messages.find(m => m.id === message.id)) {
+      return;
+    }
+    
+    const newMessages = [...messages, message]
+      .sort((a, b) => a.timestamp - b.timestamp);
     
     // Limit to 100 messages
     if (newMessages.length > 100) {
@@ -168,10 +173,17 @@ export const useGameStore = create<GameStore>((set, get) => ({
     set({ messages: newMessages });
   },
 
+  setChatMessages: (newMessages) => {
+    // Sort messages by timestamp and limit to 100
+    const sortedMessages = newMessages
+      .sort((a, b) => a.timestamp - b.timestamp)
+      .slice(-100); // Keep only the most recent 100 messages
+    
+    set({ messages: sortedMessages });
+  },
+
   // ===== Settings Management =====
   setPixelSize: (size) => set({ pixelSize: size }),
-  
-  setMaxPixelsPerUser: (max) => set({ maxPixelsPerUser: max }),
 
   // ===== Reset =====
   reset: () => set({
@@ -184,6 +196,5 @@ export const useGameStore = create<GameStore>((set, get) => ({
     isConnected: false,
     canvasSize: DEFAULT_CANVAS_SIZE,
     pixelSize: DEFAULT_PIXEL_SIZE,
-    maxPixelsPerUser: DEFAULT_MAX_PIXELS_PER_USER,
   })
 }));

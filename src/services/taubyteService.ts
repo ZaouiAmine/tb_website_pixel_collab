@@ -126,9 +126,12 @@ class TaubyteService {
 
   // ===== Connection Management =====
   async connect(): Promise<void> {
-    if (this.isConnected) {
+    if (this.isConnected || this.isReconnecting) {
+      console.log('🔌 Already connected or reconnecting, skipping...');
       return;
     }
+
+    this.isReconnecting = true;
 
     try {
       console.log('🔌 Connecting to Taubyte WebSocket channels...');
@@ -146,6 +149,7 @@ class TaubyteService {
       this.startPolling();
       
       this.isConnected = true;
+      this.isReconnecting = false;
       this.emit('connect');
       this.gameStore.setConnected(true);
       
@@ -153,6 +157,7 @@ class TaubyteService {
     } catch (error) {
       console.error('❌ Failed to connect:', error);
       this.isConnected = false;
+      this.isReconnecting = false;
       this.emit('error', error);
       throw error;
     }
@@ -209,6 +214,13 @@ class TaubyteService {
         ws.onclose = (event) => {
           console.log(`🔌 Disconnected from ${channelName}:`, event.code, event.reason);
           channel.connected = false;
+          
+          // Don't try to reconnect if it's a normal closure or if we're disconnecting
+          if (event.code === 1000 || event.code === 1001 || this.isReconnecting) {
+            console.log(`🔌 Normal closure or intentional disconnect for ${channelName}`);
+            return;
+          }
+          
           this.handleChannelDisconnect(channelName, channel);
         };
 
@@ -284,12 +296,15 @@ class TaubyteService {
       channel.reconnectAttempts++;
       
       if (channel.reconnectAttempts <= CONFIG.MAX_RETRIES) {
-        console.log(`🔄 Reconnecting to ${channelName} (attempt ${channel.reconnectAttempts})...`);
+        const delay = Math.min(CONFIG.WEBSOCKET_RECONNECT_DELAY * Math.pow(2, channel.reconnectAttempts - 1), 10000);
+        console.log(`🔄 Reconnecting to ${channelName} (attempt ${channel.reconnectAttempts}) in ${delay}ms...`);
         setTimeout(() => {
-          this.connectChannel(channelName, channel).catch(error => {
-            console.error(`Failed to reconnect to ${channelName}:`, error);
-          });
-        }, CONFIG.WEBSOCKET_RECONNECT_DELAY * channel.reconnectAttempts);
+          if (this.isConnected) { // Only reconnect if still connected
+            this.connectChannel(channelName, channel).catch(error => {
+              console.error(`Failed to reconnect to ${channelName}:`, error);
+            });
+          }
+        }, delay);
       } else {
         console.error(`❌ Max reconnection attempts reached for ${channelName}`);
         this.emit('error', new Error(`Failed to reconnect to ${channelName}`));
@@ -314,8 +329,8 @@ class TaubyteService {
   private checkHeartbeats(): void {
     const now = Date.now();
     for (const [channelName, channel] of this.channels) {
-      if (channel.connected && (now - channel.lastHeartbeat) > CONFIG.HEARTBEAT_INTERVAL * 3) {
-        console.warn(`⚠️ No heartbeat from ${channelName}, reconnecting...`);
+      if (channel.connected && (now - channel.lastHeartbeat) > CONFIG.HEARTBEAT_INTERVAL * 5) {
+        console.warn(`⚠️ No heartbeat from ${channelName} for ${Math.round((now - channel.lastHeartbeat) / 1000)}s, reconnecting...`);
         this.handleChannelDisconnect(channelName, channel);
       }
     }
@@ -506,8 +521,13 @@ class TaubyteService {
         pixelsPlaced: 0
       };
 
-      // Connect to WebSocket channels first
-      await this.connect();
+      // Connect to WebSocket channels first (if not already connected)
+      if (!this.isConnected) {
+        await this.connect();
+      }
+
+      // Load existing data after connection
+      await this.loadInitialData();
 
       // Publish user join
       await this.publishToChannel(CONFIG.WEBSOCKET_CHANNELS.USER_UPDATES, {
@@ -532,7 +552,15 @@ class TaubyteService {
     try {
       this.currentUser = user;
       this.gameStore.setCurrentUser(user);
-      await this.connect();
+      
+      // Connect only if not already connected
+      if (!this.isConnected) {
+        await this.connect();
+      }
+      
+      // Load initial data for restored users too
+      await this.loadInitialData();
+      
       return user;
     } catch (error) {
       console.error('Error restoring user authentication:', error);
@@ -577,6 +605,42 @@ class TaubyteService {
   }
 
   // ===== Data Fetching (HTTP fallback) =====
+  async loadInitialData(): Promise<void> {
+    try {
+      console.log('📥 Loading initial game data...');
+      
+      // Load existing users, messages, and canvas in parallel
+      const [users, messages, canvas] = await Promise.allSettled([
+        this.getUsers(),
+        this.getMessages(),
+        this.getCanvas()
+      ]);
+
+      // Process users
+      if (users.status === 'fulfilled' && Array.isArray(users.value)) {
+        console.log(`👥 Loaded ${users.value.length} existing users`);
+        users.value.forEach(user => this.gameStore.addUser(user));
+      }
+
+      // Process messages
+      if (messages.status === 'fulfilled' && Array.isArray(messages.value)) {
+        console.log(`💬 Loaded ${messages.value.length} existing messages`);
+        this.gameStore.setChatMessages(messages.value);
+      }
+
+      // Process canvas
+      if (canvas.status === 'fulfilled' && canvas.value) {
+        console.log('🎨 Loaded existing canvas');
+        this.emit('canvasUpdate', canvas.value);
+      }
+
+      console.log('✅ Initial data loading completed');
+    } catch (error) {
+      console.error('Error loading initial data:', error);
+      // Don't throw - let the game continue even if initial data loading fails
+    }
+  }
+
   async initializeCanvas(): Promise<void> {
     try {
       await this.makeRequest(CONFIG.API_ENDPOINTS.INIT_CANVAS, {

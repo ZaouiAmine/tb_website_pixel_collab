@@ -17,14 +17,10 @@ export const PixelCanvas: React.FC<PixelCanvasProps> = ({ className = '' }) => {
     selectedColor,
     selectedTool,
     pixelSize,
-    currentUser,
-    maxPixelsPerUser,
-    users
+    currentUser
   } = useGameStore();
 
-  const currentUserData = currentUser ? users.find(u => u.id === currentUser.id) : null;
-  const canPlacePixel = currentUserData && 
-    currentUserData.pixelsPlaced < maxPixelsPerUser;
+  const canPlacePixel = !!currentUser;
 
   // Memoize canvas size calculation for performance
   const canvasDimensions = useMemo(() => {
@@ -130,13 +126,6 @@ export const PixelCanvas: React.FC<PixelCanvasProps> = ({ className = '' }) => {
       taubyteService.placePixel(x, y, color).catch(error => {
         console.error('Failed to place pixel:', error);
       });
-
-      // Update user pixel count
-      const updatedUser = {
-        ...currentUserData!,
-        pixelsPlaced: currentUserData!.pixelsPlaced + 1
-      };
-      useGameStore.getState().updateUser(currentUser.id, updatedUser);
     }, 16), // ~60fps throttling
     [canPlacePixel, currentUser, selectedColor, selectedTool, currentUserData]
   );
@@ -240,15 +229,6 @@ export const PixelCanvas: React.FC<PixelCanvasProps> = ({ className = '' }) => {
         />
       </div>
       
-      {!canPlacePixel && currentUser && (
-        <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center z-10">
-          <div className="pixel-card text-center">
-            <p className="text-pixel-warning font-pixel">
-              Pixel limit reached!
-            </p>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

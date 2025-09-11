@@ -165,9 +165,6 @@ export const validatePixelSize = (size: number): boolean => {
 };
 
 
-export const validateMaxPixelsPerUser = (max: number): boolean => {
-  return max >= 1 && max <= 10000;
-};
 
 // URL utilities
 export const getServerUrl = (): string => {
