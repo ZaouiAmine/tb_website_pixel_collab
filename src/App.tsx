@@ -11,10 +11,23 @@ import { LoginModal } from './components/LoginModal';
 import { Gamepad2, Users, MessageCircle, BarChart3 } from 'lucide-react';
 
 function App() {
-  const { currentUser, isConnected, setCurrentUser, messages } = useGameStore();
+  const { 
+    currentUser, 
+    isConnected, 
+    setCurrentUser, 
+    setConnected,
+    messages,
+    reset 
+  } = useGameStore();
+  
   const [showLogin, setShowLogin] = useState(!currentUser);
   const [activePanel, setActivePanel] = useState<'users' | 'chat' | 'stats'>('users');
   const [unreadCount, setUnreadCount] = useState(0);
+
+  // Initialize service with store
+  useEffect(() => {
+    taubyteService.setGameStore(useGameStore);
+  }, []);
 
   // Check for saved user on app startup
   useEffect(() => {
@@ -27,21 +40,18 @@ function App() {
         
         // Set current user in service and connect
         taubyteService.setCurrentUser(user);
-        taubyteService.connect().catch(error => {
+        taubyteService.connect().then(() => {
+          setConnected(true);
+        }).catch(error => {
           console.error('Failed to connect:', error);
+          setConnected(false);
         });
       } catch (error) {
         console.error('Failed to parse saved user:', error);
         localStorage.removeItem('pixel_collab_user');
       }
     }
-  }, [setCurrentUser]);
-
-  useEffect(() => {
-    if (currentUser) {
-      setShowLogin(false);
-    }
-  }, [currentUser]);
+  }, [setCurrentUser, setConnected]);
 
   // Track unread messages
   useEffect(() => {
@@ -63,8 +73,8 @@ function App() {
     // Disconnect the service
     taubyteService.disconnect();
     
-    useGameStore.getState().setCurrentUser(null);
-    useGameStore.getState().reset();
+    // Reset store
+    reset();
     setShowLogin(true);
   };
 
@@ -84,24 +94,34 @@ function App() {
                 <span className="hidden sm:inline">Pixel Collab Game</span>
                 <span className="sm:hidden">Pixel Collab</span>
               </h1>
-              <div className={`w-2 h-2 rounded-full ${
-                isConnected ? 'bg-green-500' : 'bg-red-500'
-              }`} />
             </div>
             
             <div className="flex items-center gap-2 sm:gap-3">
-              <span className="text-xs sm:text-sm text-pixel-text font-pixel hidden sm:inline">
-                Welcome, {currentUser.username}!
-              </span>
-              <span className="text-xs text-pixel-text font-pixel sm:hidden">
-                {currentUser.username}
-              </span>
+              {/* Connection Status */}
+              <div className="flex items-center gap-1">
+                <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`} />
+                <span className="text-xs text-pixel-text/70 hidden sm:inline">
+                  {isConnected ? 'Connected' : 'Disconnected'}
+                </span>
+              </div>
+              
+              {/* User Info */}
+              <div className="flex items-center gap-2">
+                <div 
+                  className="w-6 h-6 rounded-full border-2 border-pixel-border"
+                  style={{ backgroundColor: currentUser.color }}
+                />
+                <span className="text-sm font-medium text-pixel-text hidden sm:inline">
+                  {currentUser.username}
+                </span>
+              </div>
+              
+              {/* Logout Button */}
               <button
                 onClick={handleLogout}
-                className="pixel-button text-xs px-2 sm:px-4 py-1 sm:py-2"
+                className="px-2 py-1 text-xs bg-pixel-accent text-white rounded hover:bg-pixel-accent/80 transition-colors"
               >
-                <span className="hidden sm:inline">Logout</span>
-                <span className="sm:hidden">Exit</span>
+                Logout
               </button>
             </div>
           </div>
@@ -109,103 +129,76 @@ function App() {
       </header>
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-2 sm:px-4 py-3 sm:py-6 flex-1">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-6 h-full">
-          {/* Center - Canvas */}
-          <div className="lg:col-span-2 min-w-0 order-1 lg:order-1">
-            <div className="pixel-card h-full">
-              <div className="flex items-center justify-between mb-2 sm:mb-4">
-                <h2 className="font-pixel text-base sm:text-lg text-pixel-text">Canvas</h2>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-pixel-text">
-                    {isConnected ? 'Connected' : 'Disconnected'}
-                  </span>
-                </div>
-              </div>
-              <div className="w-full overflow-hidden flex-1">
-                <PixelCanvas className="w-full h-full" />
-              </div>
-            </div>
-          </div>
+      <div className="flex-1 flex overflow-hidden">
+        {/* Left Sidebar - Tools */}
+        <div className="w-16 sm:w-20 bg-pixel-canvas border-r border-pixel-border flex flex-col items-center py-4 gap-4">
+          <ColorPicker />
+          <ToolSelector />
+        </div>
 
-          {/* Right Sidebar - Tools, Colors, Users, Chat, Stats */}
-          <div className="lg:col-span-1 min-w-0 space-y-3 sm:space-y-4 order-2 lg:order-2">
-            {/* Tools and Colors */}
-            <div className="grid grid-cols-2 gap-2 sm:gap-4">
-              <ColorPicker />
-              <ToolSelector />
-            </div>
-
-            {/* Panel Tabs */}
-            <div className="flex border-b border-pixel-border">
-              <button
-                onClick={() => setActivePanel('users')}
-                className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 text-xs font-pixel transition-colors ${
-                  activePanel === 'users'
-                    ? 'text-pixel-accent border-b-2 border-pixel-accent'
-                    : 'text-pixel-text hover:text-pixel-accent'
-                }`}
-              >
-                <Users className="w-3 h-3" />
-                Players
-              </button>
-              <button
-                onClick={() => setActivePanel('chat')}
-                className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 text-xs font-pixel transition-colors relative ${
-                  activePanel === 'chat'
-                    ? 'text-pixel-accent border-b-2 border-pixel-accent'
-                    : 'text-pixel-text hover:text-pixel-accent'
-                }`}
-              >
-                <MessageCircle className="w-3 h-3" />
-                Chat
-                {unreadCount > 0 && (
-                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-4 w-4 flex items-center justify-center font-bold">
-                    {unreadCount > 99 ? '99+' : unreadCount}
-                  </span>
-                )}
-              </button>
-              <button
-                onClick={() => setActivePanel('stats')}
-                className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 text-xs font-pixel transition-colors ${
-                  activePanel === 'stats'
-                    ? 'text-pixel-accent border-b-2 border-pixel-accent'
-                    : 'text-pixel-text hover:text-pixel-accent'
-                }`}
-              >
-                <BarChart3 className="w-3 h-3" />
-                Stats
-              </button>
-            </div>
-
-            {/* Panel Content */}
-            <div className="flex-1 min-h-0">
-              {activePanel === 'users' && <UserList />}
-              {activePanel === 'chat' && <Chat />}
-              {activePanel === 'stats' && <GameStats />}
+        {/* Center - Canvas */}
+        <div className="flex-1 flex flex-col">
+          <div className="flex-1 p-4 overflow-auto">
+            <div className="max-w-4xl mx-auto">
+              <PixelCanvas />
             </div>
           </div>
         </div>
-      </main>
 
-      {/* Footer */}
-      <footer className="border-t border-pixel-border bg-pixel-canvas flex-shrink-0">
-        <div className="max-w-7xl mx-auto px-4 py-4">
-          <div className="flex items-center justify-between text-xs text-pixel-text opacity-75">
-            <div className="flex items-center gap-4">
-              <span>Pixel Collab Game v1.0</span>
-              <span>•</span>
-              <span>Real-time collaboration</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className={`w-2 h-2 rounded-full ${
-                isConnected ? 'bg-green-500' : 'bg-red-500'
-              }`} />
-              <span>{isConnected ? 'Online' : 'Offline'}</span>
-            </div>
+        {/* Right Sidebar - Panels */}
+        <div className="w-64 sm:w-80 bg-pixel-canvas border-l border-pixel-border flex flex-col">
+          {/* Panel Tabs */}
+          <div className="flex border-b border-pixel-border">
+            <button
+              onClick={() => setActivePanel('users')}
+              className={`flex-1 flex items-center justify-center gap-2 py-3 px-4 text-sm font-medium transition-colors ${
+                activePanel === 'users'
+                  ? 'bg-pixel-accent text-white'
+                  : 'text-pixel-text hover:bg-pixel-bg'
+              }`}
+            >
+              <Users className="w-4 h-4" />
+              <span className="hidden sm:inline">Users</span>
+            </button>
+            
+            <button
+              onClick={() => setActivePanel('chat')}
+              className={`flex-1 flex items-center justify-center gap-2 py-3 px-4 text-sm font-medium transition-colors relative ${
+                activePanel === 'chat'
+                  ? 'bg-pixel-accent text-white'
+                  : 'text-pixel-text hover:bg-pixel-bg'
+              }`}
+            >
+              <MessageCircle className="w-4 h-4" />
+              <span className="hidden sm:inline">Chat</span>
+              {unreadCount > 0 && (
+                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+                  {unreadCount}
+                </span>
+              )}
+            </button>
+            
+            <button
+              onClick={() => setActivePanel('stats')}
+              className={`flex-1 flex items-center justify-center gap-2 py-3 px-4 text-sm font-medium transition-colors ${
+                activePanel === 'stats'
+                  ? 'bg-pixel-accent text-white'
+                  : 'text-pixel-text hover:bg-pixel-bg'
+              }`}
+            >
+              <BarChart3 className="w-4 h-4" />
+              <span className="hidden sm:inline">Stats</span>
+            </button>
+          </div>
+
+          {/* Panel Content */}
+          <div className="flex-1 overflow-hidden">
+            {activePanel === 'users' && <UserList />}
+            {activePanel === 'chat' && <Chat />}
+            {activePanel === 'stats' && <GameStats />}
           </div>
         </div>
-      </footer>
+      </div>
     </div>
   );
 }
