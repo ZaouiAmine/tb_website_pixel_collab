@@ -127,7 +127,7 @@ export const PixelCanvas: React.FC<PixelCanvasProps> = ({ className = '' }) => {
         console.error('Failed to place pixel:', error);
       });
     }, 16), // ~60fps throttling
-    [canPlacePixel, currentUser, selectedColor, selectedTool, currentUserData]
+    [canPlacePixel, currentUser, selectedColor, selectedTool]
   );
 
   const handlePixelPlace = (x: number, y: number) => {

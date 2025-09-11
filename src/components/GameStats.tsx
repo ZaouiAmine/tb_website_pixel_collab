@@ -9,8 +9,7 @@ export const GameStats: React.FC = () => {
     users, 
     currentUser, 
     canvasSize, 
-    pixelSize,
-    maxPixelsPerUser 
+    pixelSize
   } = useGameStore();
 
   const [connectionStatus, setConnectionStatus] = useState(taubyteService.getConnectionStatus());
@@ -40,9 +39,6 @@ export const GameStats: React.FC = () => {
   const usagePercentage = (totalPixels / pixelsUsed) * 100;
 
 
-  const pixelsRemaining = currentUserData 
-    ? Math.max(0, maxPixelsPerUser - currentUserData.pixelsPlaced)
-    : 0;
 
   return (
     <div className="pixel-card">
@@ -119,36 +115,18 @@ export const GameStats: React.FC = () => {
               <div className="flex justify-between">
                 <span className="text-pixel-text">Pixels:</span>
                 <span className="text-pixel-text font-mono">
-                  {currentUserData.pixelsPlaced}/{maxPixelsPerUser}
+                  {currentUserData.pixelsPlaced}
                 </span>
               </div>
               <div className="flex justify-between">
-                <span className="text-pixel-text">Remaining:</span>
-                <span className="text-pixel-text font-mono">{pixelsRemaining}</span>
+                <span className="text-pixel-text">Status:</span>
+                <span className="text-pixel-text font-mono">Unlimited</span>
               </div>
-            </div>
-            <div className="w-full bg-pixel-border h-2">
-              <div 
-                className="bg-pixel-info h-full transition-all duration-300"
-                style={{ width: `${(currentUserData.pixelsPlaced / maxPixelsPerUser) * 100}%` }}
-              />
             </div>
           </div>
         )}
 
 
-        {/* Game Settings */}
-        <div className="space-y-2">
-          <h4 className="font-pixel text-xs text-pixel-accent">Settings</h4>
-          <div className="grid grid-cols-2 gap-2 text-xs">
-            <div className="flex justify-between">
-              <span className="text-pixel-text">Max/User:</span>
-              <span className="text-pixel-text font-mono">
-                {maxPixelsPerUser}
-              </span>
-            </div>
-          </div>
-        </div>
       </div>
     </div>
   );
