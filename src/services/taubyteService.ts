@@ -188,14 +188,6 @@ class TaubyteService {
     try {
       console.log('📥 Loading initial state from server...');
       
-      // Try to initialize canvas first if it doesn't exist
-      try {
-        await this.initializeCanvas();
-        console.log('✅ Canvas initialized');
-      } catch (error) {
-        console.log('Canvas initialization failed (may already exist):', error);
-      }
-      
       // Load canvas state
       try {
         const canvas = await this.getCanvas();
@@ -205,24 +197,27 @@ class TaubyteService {
         }
       } catch (error) {
         console.error('❌ Failed to load canvas state:', error);
-        // Try to initialize canvas and retry once
-        try {
-          await this.initializeCanvas();
-          const canvas = await this.getCanvas();
-          if (canvas) {
-            this.gameStore.setCanvas(canvas);
-            console.log('✅ Canvas state loaded after initialization');
+        // Only try to initialize canvas if we get a 404 or similar error
+        if (error instanceof Error && (error.message.includes('404') || error.message.includes('not found'))) {
+          try {
+            await this.initializeCanvas();
+            const canvas = await this.getCanvas();
+            if (canvas) {
+              this.gameStore.setCanvas(canvas);
+              console.log('✅ Canvas state loaded after initialization');
+            }
+          } catch (retryError) {
+            console.error('❌ Failed to load canvas even after initialization:', retryError);
           }
-        } catch (retryError) {
-          console.error('❌ Failed to load canvas even after initialization:', retryError);
         }
       }
       
       // Load users
       try {
         const users = await this.getUsers();
-        if (users) {
-          users.forEach(user => this.gameStore.addUser(user));
+        if (users && Array.isArray(users)) {
+          // Clear existing users and set new ones
+          this.gameStore.setUsers(users);
           console.log('✅ Users loaded:', users.length);
         }
       } catch (error) {

@@ -17,6 +17,7 @@ interface GameStore extends GameState {
   addUser: (user: User) => void;
   removeUser: (userId: string) => void;
   updateUser: (userId: string, updates: Partial<User>) => void;
+  setUsers: (users: User[]) => void;
   addChatMessage: (message: ChatMessage) => void;
   setChatMessages: (messages: ChatMessage[]) => void;
   clearCanvas: () => void;
@@ -158,6 +159,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
     );
     set({ users: newUsers });
   },
+
+  setUsers: (users) => set({ users }),
 
   // ===== Chat Management =====
   addChatMessage: (message) => {
