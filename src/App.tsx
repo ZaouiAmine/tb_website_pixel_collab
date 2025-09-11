@@ -11,9 +11,10 @@ import { LoginModal } from './components/LoginModal';
 import { Gamepad2, Users, MessageCircle, BarChart3 } from 'lucide-react';
 
 function App() {
-  const { currentUser, isConnected, setCurrentUser } = useGameStore();
+  const { currentUser, isConnected, setCurrentUser, messages } = useGameStore();
   const [showLogin, setShowLogin] = useState(!currentUser);
   const [activePanel, setActivePanel] = useState<'users' | 'chat' | 'stats'>('users');
+  const [unreadCount, setUnreadCount] = useState(0);
 
   // Check for saved user on app startup
   useEffect(() => {
@@ -50,6 +51,19 @@ function App() {
       setShowLogin(false);
     }
   }, [currentUser]);
+
+  // Track unread messages
+  useEffect(() => {
+    if (activePanel === 'chat') {
+      setUnreadCount(0);
+    }
+  }, [activePanel]);
+
+  useEffect(() => {
+    if (activePanel !== 'chat' && messages.length > 0) {
+      setUnreadCount(prev => prev + 1);
+    }
+  }, [messages, activePanel]);
 
   const handleLogout = () => {
     // Clear localStorage
@@ -146,7 +160,7 @@ function App() {
               </button>
               <button
                 onClick={() => setActivePanel('chat')}
-                className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 text-xs font-pixel transition-colors ${
+                className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 text-xs font-pixel transition-colors relative ${
                   activePanel === 'chat'
                     ? 'text-pixel-accent border-b-2 border-pixel-accent'
                     : 'text-pixel-text hover:text-pixel-accent'
@@ -154,6 +168,11 @@ function App() {
               >
                 <MessageCircle className="w-3 h-3" />
                 Chat
+                {unreadCount > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-4 w-4 flex items-center justify-center font-bold">
+                    {unreadCount > 99 ? '99+' : unreadCount}
+                  </span>
+                )}
               </button>
               <button
                 onClick={() => setActivePanel('stats')}

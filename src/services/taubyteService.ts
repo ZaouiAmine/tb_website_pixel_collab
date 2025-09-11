@@ -136,6 +136,9 @@ class TaubyteService {
       // Connect to all channels
       await this.connectAllChannels();
       
+      // Load initial state from server
+      await this.loadInitialState();
+      
       // Start heartbeat monitoring
       this.startHeartbeat();
       
@@ -177,6 +180,38 @@ class TaubyteService {
     );
     
     await Promise.all(connectionPromises);
+  }
+
+  private async loadInitialState(): Promise<void> {
+    try {
+      console.log('📥 Loading initial state from server...');
+      
+      // Load canvas state
+      const canvas = await this.getCanvas();
+      if (canvas) {
+        this.gameStore.setCanvas(canvas);
+        console.log('✅ Canvas state loaded');
+      }
+      
+      // Load users
+      const users = await this.getUsers();
+      if (users) {
+        users.forEach(user => this.gameStore.addUser(user));
+        console.log('✅ Users loaded:', users.length);
+      }
+      
+      // Load messages
+      const messages = await this.getMessages();
+      if (messages) {
+        this.gameStore.setChatMessages(messages);
+        console.log('✅ Messages loaded:', messages.length);
+      }
+      
+      console.log('✅ Initial state loaded successfully');
+    } catch (error) {
+      console.error('❌ Failed to load initial state:', error);
+      // Don't throw error - allow connection to continue even if initial state fails
+    }
   }
 
   private async connectChannel(channelName: string, channel: WebSocketChannel): Promise<void> {
