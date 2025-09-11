@@ -1,15 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useGameStore } from '../store/gameStore';
-import type { User } from '../types/game';
+import { taubyteService } from '../services/taubyteService';
+import { MessageCircle, Send } from 'lucide-react';
 
-interface ChatProps {
-  onSendMessage: (message: string) => void;
-  currentUser: User;
-}
-
-const Chat: React.FC<ChatProps> = ({ onSendMessage, currentUser }) => {
-  const [message, setMessage] = useState('');
-  const { messages } = useGameStore();
+export const Chat: React.FC = () => {
+  const { currentUser, messages } = useGameStore();
+  const [newMessage, setNewMessage] = useState('');
+  const [isExpanded, setIsExpanded] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -20,12 +17,13 @@ const Chat: React.FC<ChatProps> = ({ onSendMessage, currentUser }) => {
     scrollToBottom();
   }, [messages]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSendMessage = (e: React.FormEvent) => {
     e.preventDefault();
-    if (message.trim()) {
-      onSendMessage(message);
-      setMessage('');
-    }
+    if (!newMessage.trim() || !currentUser) return;
+
+    // Send message using simplified service
+    taubyteService.sendMessage(newMessage.trim());
+    setNewMessage('');
   };
 
   const formatTime = (timestamp: number) => {
@@ -36,34 +34,50 @@ const Chat: React.FC<ChatProps> = ({ onSendMessage, currentUser }) => {
   };
 
   return (
-    <div className="flex flex-col h-96">
-      {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-2 space-y-2">
+    <div className="pixel-card">
+      <div className="flex items-center gap-2 mb-3">
+        <MessageCircle className="w-4 h-4 text-pixel-accent" />
+        <h3 className="font-pixel text-sm text-pixel-text">Chat</h3>
+        <button
+          className="ml-auto pixel-button text-xs px-2 py-1"
+          onClick={() => setIsExpanded(!isExpanded)}
+        >
+          {isExpanded ? 'Collapse' : 'Expand'}
+        </button>
+      </div>
+
+      <div className={`space-y-2 ${isExpanded ? 'h-64' : 'h-32'} overflow-y-auto`}>
         {messages.length === 0 ? (
-          <div className="text-center text-gray-500 py-4">
-            No messages yet. Start the conversation!
-          </div>
+          <p className="text-xs text-pixel-text opacity-50 font-pixel text-center">
+            No messages yet
+          </p>
         ) : (
-          messages.map((msg) => (
+          messages.map((message) => (
             <div
-              key={msg.id}
-              className={`flex flex-col ${
-                msg.userId === currentUser.id ? 'items-end' : 'items-start'
+              key={message.id}
+              className={`p-2 border border-pixel-border ${
+                message.userId === currentUser?.id
+                  ? 'bg-pixel-accent bg-opacity-20'
+                  : ''
               }`}
             >
-              <div
-                className={`max-w-xs px-3 py-2 rounded-lg ${
-                  msg.userId === currentUser.id
-                    ? 'bg-blue-500 text-white'
-                    : 'bg-gray-200 text-gray-800'
-                }`}
-              >
-                <div className="text-xs opacity-75 mb-1">
-                  {msg.username}
-                </div>
-                <div className="text-sm">{msg.message}</div>
-                <div className="text-xs opacity-75 mt-1">
-                  {formatTime(msg.timestamp)}
+              <div className="flex items-start gap-2">
+                <div
+                  className="w-2 h-2 border border-pixel-border mt-1 flex-shrink-0"
+                  style={{ backgroundColor: '#00ff88' }}
+                />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-pixel text-pixel-accent">
+                      {message.username}
+                    </span>
+                    <span className="text-xs text-pixel-text opacity-50">
+                      {formatTime(message.timestamp)}
+                    </span>
+                  </div>
+                  <p className="text-xs text-pixel-text font-pixel mt-1 break-words">
+                    {message.message}
+                  </p>
                 </div>
               </div>
             </div>
@@ -72,26 +86,24 @@ const Chat: React.FC<ChatProps> = ({ onSendMessage, currentUser }) => {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Input */}
-      <form onSubmit={handleSubmit} className="flex space-x-2 p-2 border-t">
+      <form onSubmit={handleSendMessage} className="mt-3 flex gap-2">
         <input
           type="text"
-          value={message}
-          onChange={(e) => setMessage(e.target.value)}
+          value={newMessage}
+          onChange={(e) => setNewMessage(e.target.value)}
           placeholder="Type a message..."
-          className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-          maxLength={500}
+          className="pixel-input flex-1 text-xs"
+          maxLength={200}
+          disabled={!currentUser}
         />
         <button
           type="submit"
-          disabled={!message.trim()}
-          className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
+          disabled={!newMessage.trim() || !currentUser}
+          className="pixel-button px-3 py-2 disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          Send
+          <Send className="w-3 h-3" />
         </button>
       </form>
     </div>
   );
 };
-
-export default Chat;
