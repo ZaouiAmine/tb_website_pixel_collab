@@ -1,220 +1,243 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useGameStore } from './store/gameStore';
 import { taubyteService } from './services/taubyteService';
-import { PixelCanvas } from './components/PixelCanvas';
-import { ColorPicker } from './components/ColorPicker';
-import { ToolSelector } from './components/ToolSelector';
-import { UserList } from './components/UserList';
-import { Chat } from './components/Chat';
-import { GameStats } from './components/GameStats';
-import { LoginModal } from './components/LoginModal';
-import { Gamepad2, Users, MessageCircle, BarChart3 } from 'lucide-react';
+import type { User } from './types/game';
+
+// Components
+import PixelCanvas from './components/PixelCanvas';
+import Chat from './components/Chat';
+import UserList from './components/UserList';
+import LoginModal from './components/LoginModal';
+import ColorPicker from './components/ColorPicker';
+import ToolSelector from './components/ToolSelector';
+import GameStats from './components/GameStats';
 
 function App() {
-  const { currentUser, isConnected, setCurrentUser, messages } = useGameStore();
-  const [showLogin, setShowLogin] = useState(!currentUser);
-  const [activePanel, setActivePanel] = useState<'users' | 'chat' | 'stats'>('users');
+  const { 
+    activePanel, 
+    setActivePanel, 
+    isConnected, 
+    setIsConnected,
+    messages 
+  } = useGameStore();
+  
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [selectedColor, setSelectedColor] = useState('#ff0000');
   const [unreadCount, setUnreadCount] = useState(0);
 
-  // Check for saved user on app startup
+  // Initialize connection
   useEffect(() => {
-    const savedUser = localStorage.getItem('pixel_collab_user');
+    const initializeConnection = async () => {
+      try {
+        await taubyteService.connect();
+        setIsConnected(true);
+      } catch (error) {
+        console.error('Failed to connect:', error);
+        setIsConnected(false);
+      }
+    };
+
+    initializeConnection();
+
+    return () => {
+      taubyteService.disconnect();
+    };
+  }, [setIsConnected]);
+
+  // Handle user authentication
+  useEffect(() => {
+    const savedUser = localStorage.getItem('pixelCollabUser');
     if (savedUser) {
       try {
         const user = JSON.parse(savedUser);
         setCurrentUser(user);
-        setShowLogin(false);
-        
-        // Restore user authentication and connect the service
-        taubyteService.restoreUserAuthentication(user).then(updatedUser => {
-          // Update localStorage with any changes from the backend
-          if (updatedUser) {
-            localStorage.setItem('pixel_collab_user', JSON.stringify(updatedUser));
-            setCurrentUser(updatedUser);
-          }
-        }).catch(error => {
-          console.error('Failed to restore user authentication:', error);
-          // If restoration fails, clear the saved user and show login
-          localStorage.removeItem('pixel_collab_user');
-          setCurrentUser(null);
-          setShowLogin(true);
-        });
+        taubyteService.setCurrentUser(user);
+        taubyteService.updateUserStatus(true);
       } catch (error) {
-        console.error('Failed to parse saved user:', error);
-        localStorage.removeItem('pixel_collab_user');
+        console.error('Error parsing saved user:', error);
+        localStorage.removeItem('pixelCollabUser');
       }
     }
-  }, [setCurrentUser]);
-
-  useEffect(() => {
-    if (currentUser) {
-      setShowLogin(false);
-    }
-  }, [currentUser]);
+  }, []);
 
   // Track unread messages
   useEffect(() => {
-    if (activePanel === 'chat') {
-      setUnreadCount(0);
-    }
-  }, [activePanel]);
-
-  useEffect(() => {
     if (activePanel !== 'chat' && messages.length > 0) {
       setUnreadCount(prev => prev + 1);
+    } else if (activePanel === 'chat') {
+      setUnreadCount(0);
     }
   }, [messages, activePanel]);
 
+  const handleLogin = (user: User) => {
+    setCurrentUser(user);
+    taubyteService.setCurrentUser(user);
+    taubyteService.updateUserStatus(true);
+    localStorage.setItem('pixelCollabUser', JSON.stringify(user));
+  };
+
   const handleLogout = () => {
-    // Clear localStorage
-    localStorage.removeItem('pixel_collab_user');
-    
-    // Disconnect the service
-    taubyteService.disconnect();
-    
-    useGameStore.getState().setCurrentUser(null);
-    useGameStore.getState().reset();
-    setShowLogin(true);
+    if (currentUser) {
+      taubyteService.updateUserStatus(false);
+    }
+    setCurrentUser(null);
+    taubyteService.setCurrentUser(null);
+    localStorage.removeItem('pixelCollabUser');
+  };
+
+  const handlePixelClick = (x: number, y: number) => {
+    if (currentUser) {
+      taubyteService.placePixel(x, y, selectedColor);
+    }
+  };
+
+  const handleSendMessage = (message: string) => {
+    taubyteService.sendMessage(message);
+  };
+
+  const handleResetCanvas = async () => {
+    if (window.confirm('Are you sure you want to reset the canvas? This action cannot be undone.')) {
+      try {
+        await taubyteService.resetCanvas();
+        window.location.reload(); // Reload to get fresh canvas
+      } catch (error) {
+        console.error('Failed to reset canvas:', error);
+        alert('Failed to reset canvas. Please try again.');
+      }
+    }
   };
 
   if (!currentUser) {
-    return <LoginModal isOpen={showLogin} onClose={() => setShowLogin(false)} />;
+    return <LoginModal onLogin={handleLogin} />;
   }
 
   return (
-    <div className="min-h-screen bg-pixel-bg text-pixel-text flex flex-col">
+    <div className="min-h-screen bg-gray-100">
       {/* Header */}
-      <header className="border-b border-pixel-border bg-pixel-canvas flex-shrink-0">
-        <div className="max-w-7xl mx-auto px-2 sm:px-4 py-2 sm:py-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 sm:gap-3">
-              <Gamepad2 className="w-5 h-5 sm:w-6 sm:h-6 text-pixel-accent" />
-              <h1 className="font-pixel text-lg sm:text-xl text-pixel-text">
-                <span className="hidden sm:inline">Pixel Collab Game</span>
-                <span className="sm:hidden">Pixel Collab</span>
-              </h1>
-              <div className={`w-2 h-2 rounded-full ${
-                isConnected ? 'bg-green-500' : 'bg-red-500'
-              }`} />
+      <header className="bg-white shadow-sm border-b">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center h-16">
+            <div className="flex items-center space-x-4">
+              <h1 className="text-xl font-bold text-gray-900">Pixel Collab</h1>
+              <div className="flex items-center space-x-2">
+                <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`}></div>
+                <span className="text-sm text-gray-600">
+                  {isConnected ? 'Connected' : 'Disconnected'}
+                </span>
+              </div>
             </div>
             
-            <div className="flex items-center gap-2 sm:gap-3">
-              <span className="text-xs sm:text-sm text-pixel-text font-pixel hidden sm:inline">
-                Welcome, {currentUser.username}!
-              </span>
-              <span className="text-xs text-pixel-text font-pixel sm:hidden">
-                {currentUser.username}
-              </span>
+            <div className="flex items-center space-x-4">
+              <span className="text-sm text-gray-600">Welcome, {currentUser.username}</span>
               <button
                 onClick={handleLogout}
-                className="pixel-button text-xs px-2 sm:px-4 py-1 sm:py-2"
+                className="px-3 py-1 text-sm bg-red-500 text-white rounded hover:bg-red-600"
               >
-                <span className="hidden sm:inline">Logout</span>
-                <span className="sm:hidden">Exit</span>
+                Logout
               </button>
             </div>
           </div>
         </div>
       </header>
 
-      {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-2 sm:px-4 py-3 sm:py-6 flex-1">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-6 h-full">
-          {/* Center - Canvas */}
-          <div className="lg:col-span-2 min-w-0 order-1 lg:order-1">
-            <div className="pixel-card h-full">
-              <div className="flex items-center justify-between mb-2 sm:mb-4">
-                <h2 className="font-pixel text-base sm:text-lg text-pixel-text">Canvas</h2>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-pixel-text">
-                    {isConnected ? 'Connected' : 'Disconnected'}
-                  </span>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+          {/* Main Canvas Area */}
+          <div className="lg:col-span-3">
+            <div className="bg-white rounded-lg shadow p-6">
+              {/* Canvas Controls */}
+              <div className="flex flex-wrap items-center justify-between mb-4 gap-4">
+                <div className="flex items-center space-x-4">
+                  <ColorPicker 
+                    selectedColor={selectedColor} 
+                    onColorChange={setSelectedColor} 
+                  />
+                  <ToolSelector />
+                </div>
+                
+                <div className="flex items-center space-x-2">
+                  <button
+                    onClick={handleResetCanvas}
+                    className="px-3 py-1 text-sm bg-yellow-500 text-white rounded hover:bg-yellow-600"
+                  >
+                    Reset Canvas
+                  </button>
                 </div>
               </div>
-              <div className="w-full overflow-hidden flex-1">
-                <PixelCanvas className="w-full h-full" />
+
+              {/* Canvas */}
+              <div className="border rounded-lg overflow-hidden">
+                <PixelCanvas onPixelClick={handlePixelClick} />
               </div>
             </div>
           </div>
 
-          {/* Right Sidebar - Tools, Colors, Users, Chat, Stats */}
-          <div className="lg:col-span-1 min-w-0 space-y-3 sm:space-y-4 order-2 lg:order-2">
-            {/* Tools and Colors */}
-            <div className="grid grid-cols-2 gap-2 sm:gap-4">
-              <ColorPicker />
-              <ToolSelector />
-            </div>
+          {/* Sidebar */}
+          <div className="lg:col-span-1">
+            <div className="space-y-6">
+              {/* Game Stats */}
+              <GameStats />
 
-            {/* Panel Tabs */}
-            <div className="flex border-b border-pixel-border">
-              <button
-                onClick={() => setActivePanel('users')}
-                className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 text-xs font-pixel transition-colors ${
-                  activePanel === 'users'
-                    ? 'text-pixel-accent border-b-2 border-pixel-accent'
-                    : 'text-pixel-text hover:text-pixel-accent'
-                }`}
-              >
-                <Users className="w-3 h-3" />
-                Players
-              </button>
-              <button
-                onClick={() => setActivePanel('chat')}
-                className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 text-xs font-pixel transition-colors relative ${
-                  activePanel === 'chat'
-                    ? 'text-pixel-accent border-b-2 border-pixel-accent'
-                    : 'text-pixel-text hover:text-pixel-accent'
-                }`}
-              >
-                <MessageCircle className="w-3 h-3" />
-                Chat
-                {unreadCount > 0 && (
-                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-4 w-4 flex items-center justify-center font-bold">
-                    {unreadCount > 99 ? '99+' : unreadCount}
-                  </span>
-                )}
-              </button>
-              <button
-                onClick={() => setActivePanel('stats')}
-                className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 text-xs font-pixel transition-colors ${
-                  activePanel === 'stats'
-                    ? 'text-pixel-accent border-b-2 border-pixel-accent'
-                    : 'text-pixel-text hover:text-pixel-accent'
-                }`}
-              >
-                <BarChart3 className="w-3 h-3" />
-                Stats
-              </button>
-            </div>
+              {/* Navigation Tabs */}
+              <div className="bg-white rounded-lg shadow">
+                <div className="flex border-b">
+                  <button
+                    onClick={() => setActivePanel('canvas')}
+                    className={`flex-1 px-4 py-2 text-sm font-medium ${
+                      activePanel === 'canvas'
+                        ? 'bg-blue-50 text-blue-700 border-b-2 border-blue-500'
+                        : 'text-gray-500 hover:text-gray-700'
+                    }`}
+                  >
+                    Canvas
+                  </button>
+                  <button
+                    onClick={() => setActivePanel('chat')}
+                    className={`flex-1 px-4 py-2 text-sm font-medium relative ${
+                      activePanel === 'chat'
+                        ? 'bg-blue-50 text-blue-700 border-b-2 border-blue-500'
+                        : 'text-gray-500 hover:text-gray-700'
+                    }`}
+                  >
+                    Chat
+                    {unreadCount > 0 && (
+                      <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+                        {unreadCount}
+                      </span>
+                    )}
+                  </button>
+                  <button
+                    onClick={() => setActivePanel('users')}
+                    className={`flex-1 px-4 py-2 text-sm font-medium ${
+                      activePanel === 'users'
+                        ? 'bg-blue-50 text-blue-700 border-b-2 border-blue-500'
+                        : 'text-gray-500 hover:text-gray-700'
+                    }`}
+                  >
+                    Users
+                  </button>
+                </div>
 
-            {/* Panel Content */}
-            <div className="flex-1 min-h-0">
-              {activePanel === 'users' && <UserList />}
-              {activePanel === 'chat' && <Chat />}
-              {activePanel === 'stats' && <GameStats />}
+                <div className="p-4">
+                  {activePanel === 'chat' && (
+                    <Chat 
+                      onSendMessage={handleSendMessage}
+                      currentUser={currentUser}
+                    />
+                  )}
+                  {activePanel === 'users' && <UserList />}
+                  {activePanel === 'canvas' && (
+                    <div className="text-center text-gray-500 py-8">
+                      <p>Canvas view is active</p>
+                      <p className="text-sm mt-2">Click on the canvas above to place pixels</p>
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
         </div>
-      </main>
-
-      {/* Footer */}
-      <footer className="border-t border-pixel-border bg-pixel-canvas flex-shrink-0">
-        <div className="max-w-7xl mx-auto px-4 py-4">
-          <div className="flex items-center justify-between text-xs text-pixel-text opacity-75">
-            <div className="flex items-center gap-4">
-              <span>Pixel Collab Game v1.0</span>
-              <span>•</span>
-              <span>Real-time collaboration</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className={`w-2 h-2 rounded-full ${
-                isConnected ? 'bg-green-500' : 'bg-red-500'
-              }`} />
-              <span>{isConnected ? 'Online' : 'Offline'}</span>
-            </div>
-          </div>
-        </div>
-      </footer>
+      </div>
     </div>
   );
 }

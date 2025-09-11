@@ -1,209 +1,100 @@
 import { create } from 'zustand';
-import type { GameState, User, Pixel, Tool, ChatMessage } from '../types/game';
+import type { Pixel, User, ChatMessage } from '../types/game';
 
-// ===== Constants =====
-const DEFAULT_CANVAS_SIZE = { width: 100, height: 100 };
-const DEFAULT_PIXEL_SIZE = 8;
-// const MAX_CHAT_MESSAGES = 100; // Reserved for future chat implementation
+// ===== Store Interface =====
+interface GameStore {
+  // Canvas state
+  canvas: Pixel[][];
+  setCanvas: (canvas: Pixel[][]) => void;
+  updatePixel: (pixel: Pixel) => void;
 
-// ===== Types =====
-interface GameStore extends GameState {
-  // Actions
-  setCurrentUser: (user: User | null) => void;
-  setSelectedColor: (color: string) => void;
-  setSelectedTool: (tool: Tool) => void;
-  setConnected: (connected: boolean) => void;
-  updatePixel: (x: number, y: number, color: string, userId: string) => void;
+  // User state
+  users: User[];
+  setUsers: (users: User[]) => void;
+  updateUser: (user: User) => void;
   addUser: (user: User) => void;
   removeUser: (userId: string) => void;
-  updateUser: (userId: string, updates: Partial<User>) => void;
-  setUsers: (users: User[]) => void;
-  addChatMessage: (message: ChatMessage) => void;
-  setChatMessages: (messages: ChatMessage[]) => void;
-  clearCanvas: () => void;
-  initializeCanvas: (width: number, height: number) => void;
-  setCanvasSize: (width: number, height: number) => void;
-  setPixelSize: (size: number) => void;
-  setCanvas: (canvas: Pixel[][]) => void;
-  reset: () => void;
+
+  // Chat state
+  messages: ChatMessage[];
+  setMessages: (messages: ChatMessage[]) => void;
+  addMessage: (message: ChatMessage) => void;
+
+  // UI state
+  activePanel: 'canvas' | 'chat' | 'users';
+  setActivePanel: (panel: 'canvas' | 'chat' | 'users') => void;
+  
+  // Connection state
+  isConnected: boolean;
+  setIsConnected: (connected: boolean) => void;
 }
 
-// ===== Utility Functions =====
-const createEmptyCanvas = (width: number, height: number): Pixel[][] => {
-  const canvas: Pixel[][] = [];
-  for (let y = 0; y < height; y++) {
-    const row: Pixel[] = [];
-    for (let x = 0; x < width; x++) {
-      row.push({
-        x,
-        y,
-        color: '#ffffff',
-        userId: '',
-        timestamp: 0
-      });
-    }
-    canvas.push(row);
-  }
-  return canvas;
-};
-
 // ===== Store Implementation =====
-export const useGameStore = create<GameStore>((set, get) => ({
-  // Initial state
-  canvas: createEmptyCanvas(DEFAULT_CANVAS_SIZE.width, DEFAULT_CANVAS_SIZE.height),
-  users: [],
-  messages: [],
-  currentUser: null,
-  selectedColor: '#ff0000',
-  selectedTool: 'pencil',
-  isConnected: false,
-  canvasSize: DEFAULT_CANVAS_SIZE,
-  pixelSize: DEFAULT_PIXEL_SIZE,
-
-  // ===== User Management =====
-  setCurrentUser: (user) => set({ currentUser: user }),
-  
-  setSelectedColor: (color) => set({ selectedColor: color }),
-  
-  setSelectedTool: (tool) => set({ selectedTool: tool }),
-  
-  setConnected: (connected) => set({ isConnected: connected }),
-
-  // ===== Canvas Management =====
-  updatePixel: (x, y, color, userId) => {
-    const { canvas } = get();
-    if (canvas && canvas.length > 0 && canvas[0] && x >= 0 && x < canvas[0].length && y >= 0 && y < canvas.length) {
-      // Check if pixel actually changed to avoid unnecessary updates
-      const currentPixel = canvas[y][x];
-      if (currentPixel.color === color && currentPixel.userId === userId) {
-        return; // No change needed
-      }
-
-      // Create new canvas with updated pixel (immutable update)
-      const newCanvas = canvas.map((row, rowIndex) => {
-        if (rowIndex === y) {
-          return row.map((pixel, colIndex) => {
-            if (colIndex === x) {
-              return { x, y, color, userId, timestamp: Date.now() };
-            }
-            return pixel;
-          });
-        }
-        return row;
-      });
-      set({ canvas: newCanvas });
-    }
-  },
-
+export const useGameStore = create<GameStore>((set) => ({
+  // Canvas state
+  canvas: [],
   setCanvas: (canvas) => set({ canvas }),
-
-  clearCanvas: () => {
-    const { canvasSize } = get();
-    set({ canvas: createEmptyCanvas(canvasSize.width, canvasSize.height) });
-  },
-
-  initializeCanvas: (width, height) => {
-    set({ 
-      canvas: createEmptyCanvas(width, height),
-      canvasSize: { width, height }
-    });
-  },
-
-  setCanvasSize: (width, height) => {
-    const { canvas } = get();
-    const newCanvas = createEmptyCanvas(width, height);
+  
+  updatePixel: (pixel) => set((state) => {
+    const newCanvas = state.canvas.map(row => [...row]);
     
-    // Copy existing pixels that fit in the new size
-    const maxY = Math.min(height, canvas.length);
-    const maxX = Math.min(width, canvas[0]?.length || 0);
-    
-    for (let y = 0; y < maxY; y++) {
-      for (let x = 0; x < maxX; x++) {
-        if (canvas[y]?.[x]?.userId) {
-          newCanvas[y][x] = { ...canvas[y][x], x, y };
-        }
-      }
+    if (pixel.y >= 0 && pixel.y < newCanvas.length && 
+        pixel.x >= 0 && pixel.x < newCanvas[pixel.y].length) {
+      newCanvas[pixel.y][pixel.x] = pixel;
     }
     
-    set({ 
-      canvas: newCanvas,
-      canvasSize: { width, height }
-    });
-  },
+    return { canvas: newCanvas };
+  }),
 
-  // ===== User Management =====
-  addUser: (user) => {
-    const { users } = get();
-    const existingUserIndex = users.findIndex(u => u.id === user.id);
-    
-    if (existingUserIndex >= 0) {
-      // Update existing user
-      const newUsers = [...users];
-      newUsers[existingUserIndex] = user;
-      set({ users: newUsers });
-    } else {
-      // Add new user
-      set({ users: [...users, user] });
-    }
-  },
-  
-  removeUser: (userId) => {
-    const { users } = get();
-    set({ users: users.filter(u => u.id !== userId) });
-  },
-  
-  updateUser: (userId, updates) => {
-    const { users } = get();
-    const newUsers = users.map(user => 
-      user.id === userId ? { ...user, ...updates } : user
-    );
-    set({ users: newUsers });
-  },
-
+  // User state
+  users: [],
   setUsers: (users) => set({ users }),
-
-  // ===== Chat Management =====
-  addChatMessage: (message) => {
-    const { messages } = get();
-    
-    // Check for duplicates
-    if (messages.find(m => m.id === message.id)) {
-      return;
+  
+  updateUser: (user) => set((state) => {
+    const existingIndex = state.users.findIndex(u => u.id === user.id);
+    if (existingIndex >= 0) {
+      const newUsers = [...state.users];
+      newUsers[existingIndex] = user;
+      return { users: newUsers };
+    } else {
+      return { users: [...state.users, user] };
     }
-    
-    const newMessages = [...messages, message]
-      .sort((a, b) => a.timestamp - b.timestamp);
-    
-    // Limit to 100 messages
-    if (newMessages.length > 100) {
-      newMessages.shift(); // Remove oldest message
+  }),
+  
+  addUser: (user) => set((state) => {
+    const exists = state.users.some(u => u.id === user.id);
+    if (!exists) {
+      return { users: [...state.users, user] };
     }
-    
-    set({ messages: newMessages });
-  },
+    return state;
+  }),
+  
+  removeUser: (userId) => set((state) => ({
+    users: state.users.filter(u => u.id !== userId)
+  })),
 
-  setChatMessages: (newMessages) => {
-    // Sort messages by timestamp and limit to 100
-    const sortedMessages = newMessages
-      .sort((a, b) => a.timestamp - b.timestamp)
-      .slice(-100); // Keep only the most recent 100 messages
-    
-    set({ messages: sortedMessages });
-  },
+  // Chat state
+  messages: [],
+  setMessages: (messages) => set({ messages }),
+  
+  addMessage: (message) => set((state) => {
+    const exists = state.messages.some(m => m.id === message.id);
+    if (!exists) {
+      const newMessages = [...state.messages, message];
+      // Keep only the latest 100 messages
+      if (newMessages.length > 100) {
+        newMessages.splice(0, newMessages.length - 100);
+      }
+      return { messages: newMessages };
+    }
+    return state;
+  }),
 
-  // ===== Settings Management =====
-  setPixelSize: (size) => set({ pixelSize: size }),
+  // UI state
+  activePanel: 'canvas',
+  setActivePanel: (panel) => set({ activePanel: panel }),
 
-  // ===== Reset =====
-  reset: () => set({
-    canvas: createEmptyCanvas(DEFAULT_CANVAS_SIZE.width, DEFAULT_CANVAS_SIZE.height),
-    users: [],
-    messages: [],
-    currentUser: null,
-    selectedColor: '#ff0000',
-    selectedTool: 'pencil',
-    isConnected: false,
-    canvasSize: DEFAULT_CANVAS_SIZE,
-    pixelSize: DEFAULT_PIXEL_SIZE,
-  })
+  // Connection state
+  isConnected: false,
+  setIsConnected: (connected) => set({ isConnected: connected }),
 }));
