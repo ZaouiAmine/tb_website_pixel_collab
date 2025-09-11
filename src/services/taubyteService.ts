@@ -83,7 +83,8 @@ class TaubyteService {
       try {
         const response = await fetch(`${CONFIG.BASE_URL}/api/getWebSocketURL?room=${channelName}`);
         if (!response.ok) {
-          throw new Error(`Failed to get WebSocket URL for ${channelName}: ${response.status}`);
+          console.error(`❌ Failed to get WebSocket URL for ${channelName}: ${response.status}`);
+          return; // Continue with other channels
         }
         
         const data = await response.json();
@@ -94,21 +95,22 @@ class TaubyteService {
         }
       } catch (error) {
         console.error(`❌ Error getting WebSocket URL for ${channelName}:`, error);
-        throw error;
+        // Continue with other channels instead of throwing
       }
     });
 
-    await Promise.all(promises);
+    await Promise.allSettled(promises);
   }
 
   private async connectToChannels(): Promise<void> {
     const promises = Object.entries(CONFIG.WEBSOCKET_CHANNELS).map(async ([, channelName]) => {
       const channel = this.channels.get(channelName);
       if (!channel || !channel.url) {
-        throw new Error(`No WebSocket URL for channel ${channelName}`);
+        console.warn(`⚠️ No WebSocket URL for channel ${channelName}, skipping`);
+        return;
       }
 
-      return new Promise<void>((resolve, reject) => {
+      return new Promise<void>((resolve) => {
         console.log(`🔗 Connecting to ${channelName}...`);
         
         const ws = new WebSocket(channel.url);
@@ -129,16 +131,17 @@ class TaubyteService {
           console.log(`🔌 Disconnected from ${channelName}`);
           channel.connected = false;
           this.handleReconnect(channelName);
+          resolve(); // Resolve even on close to not block other channels
         };
 
         ws.onerror = (error) => {
           console.error(`❌ WebSocket error for ${channelName}:`, error);
-          reject(error);
+          resolve(); // Resolve even on error to not block other channels
         };
       });
     });
 
-    await Promise.all(promises);
+    await Promise.allSettled(promises);
   }
 
   private handleReconnect(channelName: string): void {
