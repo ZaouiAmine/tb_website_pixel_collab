@@ -63,9 +63,6 @@ class TaubyteService {
   private pixelQueue: PixelQueueItem[] = [];
   private isProcessingPixelQueue = false;
   
-  // Message deduplication
-  private processedMessageIds: Set<string> = new Set();
-  
   // Connection state
   private isReconnecting = false;
 
@@ -126,12 +123,9 @@ class TaubyteService {
 
   // ===== Connection Management =====
   async connect(): Promise<void> {
-    if (this.isConnected || this.isReconnecting) {
-      console.log('🔌 Already connected or reconnecting, skipping...');
+    if (this.isConnected) {
       return;
     }
-
-    this.isReconnecting = true;
 
     try {
       console.log('🔌 Connecting to Taubyte WebSocket channels...');
@@ -149,7 +143,6 @@ class TaubyteService {
       this.startPolling();
       
       this.isConnected = true;
-      this.isReconnecting = false;
       this.emit('connect');
       this.gameStore.setConnected(true);
       
@@ -157,7 +150,6 @@ class TaubyteService {
     } catch (error) {
       console.error('❌ Failed to connect:', error);
       this.isConnected = false;
-      this.isReconnecting = false;
       this.emit('error', error);
       throw error;
     }
@@ -181,14 +173,10 @@ class TaubyteService {
 
   private async connectAllChannels(): Promise<void> {
     const connectionPromises = Array.from(this.channels.entries()).map(([channelName, channel]) =>
-      this.connectChannel(channelName, channel).catch(error => {
-        console.error(`Failed to connect to ${channelName}:`, error);
-        // Don't throw - let other channels connect
-        return null;
-      })
+      this.connectChannel(channelName, channel)
     );
     
-    await Promise.allSettled(connectionPromises);
+    await Promise.all(connectionPromises);
   }
 
   private async connectChannel(channelName: string, channel: WebSocketChannel): Promise<void> {
@@ -214,22 +202,12 @@ class TaubyteService {
         ws.onclose = (event) => {
           console.log(`🔌 Disconnected from ${channelName}:`, event.code, event.reason);
           channel.connected = false;
-          
-          // Don't try to reconnect if it's a normal closure or if we're disconnecting
-          if (event.code === 1000 || event.code === 1001 || this.isReconnecting) {
-            console.log(`🔌 Normal closure or intentional disconnect for ${channelName}`);
-            return;
-          }
-          
           this.handleChannelDisconnect(channelName, channel);
         };
 
         ws.onerror = (error) => {
           console.error(`❌ WebSocket error for ${channelName}:`, error);
-          // Don't reject on error during initial connection - let it retry
-          if (channel.connected) {
-            reject(error);
-          }
+          reject(error);
         };
 
       } catch (error) {
@@ -296,15 +274,12 @@ class TaubyteService {
       channel.reconnectAttempts++;
       
       if (channel.reconnectAttempts <= CONFIG.MAX_RETRIES) {
-        const delay = Math.min(CONFIG.WEBSOCKET_RECONNECT_DELAY * Math.pow(2, channel.reconnectAttempts - 1), 10000);
-        console.log(`🔄 Reconnecting to ${channelName} (attempt ${channel.reconnectAttempts}) in ${delay}ms...`);
+        console.log(`🔄 Reconnecting to ${channelName} (attempt ${channel.reconnectAttempts})...`);
         setTimeout(() => {
-          if (this.isConnected) { // Only reconnect if still connected
-            this.connectChannel(channelName, channel).catch(error => {
-              console.error(`Failed to reconnect to ${channelName}:`, error);
-            });
-          }
-        }, delay);
+          this.connectChannel(channelName, channel).catch(error => {
+            console.error(`Failed to reconnect to ${channelName}:`, error);
+          });
+        }, CONFIG.WEBSOCKET_RECONNECT_DELAY * channel.reconnectAttempts);
       } else {
         console.error(`❌ Max reconnection attempts reached for ${channelName}`);
         this.emit('error', new Error(`Failed to reconnect to ${channelName}`));
@@ -329,8 +304,8 @@ class TaubyteService {
   private checkHeartbeats(): void {
     const now = Date.now();
     for (const [channelName, channel] of this.channels) {
-      if (channel.connected && (now - channel.lastHeartbeat) > CONFIG.HEARTBEAT_INTERVAL * 5) {
-        console.warn(`⚠️ No heartbeat from ${channelName} for ${Math.round((now - channel.lastHeartbeat) / 1000)}s, reconnecting...`);
+      if (channel.connected && (now - channel.lastHeartbeat) > CONFIG.HEARTBEAT_INTERVAL * 3) {
+        console.warn(`⚠️ No heartbeat from ${channelName}, reconnecting...`);
         this.handleChannelDisconnect(channelName, channel);
       }
     }
@@ -374,18 +349,7 @@ class TaubyteService {
   }
 
   private handleUserUpdate(user: any): void {
-    // Check for duplicate user updates (same user, same timestamp)
-    const userKey = `${user.id}_${user.lastSeen}`;
-    if (this.processedMessageIds.has(userKey)) {
-      console.log('🔄 Duplicate user update ignored:', userKey);
-      return;
-    }
-    
     console.log('👤 Received user update:', user);
-    
-    // Add to processed messages set
-    this.processedMessageIds.add(userKey);
-    
     if (user.isOnline) {
       this.gameStore.addUser(user);
       this.emit('userJoin', user);
@@ -396,26 +360,7 @@ class TaubyteService {
   }
 
   private handleChatMessage(message: any): void {
-    // Check for duplicate messages
-    if (message.id && this.processedMessageIds.has(message.id)) {
-      console.log('🔄 Duplicate chat message ignored:', message.id);
-      return;
-    }
-    
     console.log('💬 Received chat message:', message);
-    
-    // Add to processed messages set
-    if (message.id) {
-      this.processedMessageIds.add(message.id);
-      // Clean up old message IDs to prevent memory leaks
-      if (this.processedMessageIds.size > 1000) {
-        const idsArray = Array.from(this.processedMessageIds);
-        this.processedMessageIds.clear();
-        // Keep only the most recent 500 IDs
-        idsArray.slice(-500).forEach(id => this.processedMessageIds.add(id));
-      }
-    }
-    
     this.gameStore.addChatMessage(message);
     this.emit('chatMessage', message);
   }
@@ -521,13 +466,8 @@ class TaubyteService {
         pixelsPlaced: 0
       };
 
-      // Connect to WebSocket channels first (if not already connected)
-      if (!this.isConnected) {
-        await this.connect();
-      }
-
-      // Load existing data after connection
-      await this.loadInitialData();
+      // Connect to WebSocket channels first
+      await this.connect();
 
       // Publish user join
       await this.publishToChannel(CONFIG.WEBSOCKET_CHANNELS.USER_UPDATES, {
@@ -552,15 +492,7 @@ class TaubyteService {
     try {
       this.currentUser = user;
       this.gameStore.setCurrentUser(user);
-      
-      // Connect only if not already connected
-      if (!this.isConnected) {
-        await this.connect();
-      }
-      
-      // Load initial data for restored users too
-      await this.loadInitialData();
-      
+      await this.connect();
       return user;
     } catch (error) {
       console.error('Error restoring user authentication:', error);
@@ -605,53 +537,6 @@ class TaubyteService {
   }
 
   // ===== Data Fetching (HTTP fallback) =====
-  async loadInitialData(): Promise<void> {
-    try {
-      console.log('📥 Loading initial game data...');
-      
-      // Load existing users, messages, and canvas in parallel
-      const [users, messages, canvas] = await Promise.allSettled([
-        this.getUsers(),
-        this.getMessages(),
-        this.getCanvas()
-      ]);
-
-      // Process users
-      if (users.status === 'fulfilled' && Array.isArray(users.value)) {
-        console.log(`👥 Loaded ${users.value.length} existing users`);
-        console.log('👥 First user:', users.value[0]);
-        users.value.forEach(user => this.gameStore.addUser(user));
-      } else {
-        console.log('👥 Users status:', users.status, 'Value:', users.status === 'rejected' ? users.reason : 'unknown');
-      }
-
-      // Process messages
-      if (messages.status === 'fulfilled' && Array.isArray(messages.value)) {
-        console.log(`💬 Loaded ${messages.value.length} existing messages`);
-        console.log('💬 First message:', messages.value[0]);
-        this.gameStore.setChatMessages(messages.value);
-      } else {
-        console.log('💬 Messages status:', messages.status, 'Value:', messages.status === 'rejected' ? messages.reason : 'unknown');
-      }
-
-      // Process canvas
-      if (canvas.status === 'fulfilled' && canvas.value) {
-        console.log('🎨 Loaded existing canvas:', canvas.value);
-        console.log('🎨 Canvas type:', typeof canvas.value, 'Array?', Array.isArray(canvas.value));
-        if (Array.isArray(canvas.value) && canvas.value.length > 0) {
-          console.log('🎨 First row:', canvas.value[0]);
-          console.log('🎨 First pixel:', canvas.value[0]?.[0]);
-        }
-        this.gameStore.setCanvas(canvas.value);
-      }
-
-      console.log('✅ Initial data loading completed');
-    } catch (error) {
-      console.error('Error loading initial data:', error);
-      // Don't throw - let the game continue even if initial data loading fails
-    }
-  }
-
   async initializeCanvas(): Promise<void> {
     try {
       await this.makeRequest(CONFIG.API_ENDPOINTS.INIT_CANVAS, {
@@ -669,8 +554,7 @@ class TaubyteService {
       return await response.json();
     } catch (error) {
       console.error('Error fetching canvas:', error);
-      // Return null instead of throwing to prevent polling failures
-      return null;
+      throw error;
     }
   }
 
@@ -687,23 +571,10 @@ class TaubyteService {
   async getMessages(): Promise<ChatMessage[]> {
     try {
       const response = await this.makeRequest(CONFIG.API_ENDPOINTS.GET_MESSAGES);
-      const data = await response.json();
-      
-      // Handle different response formats
-      if (Array.isArray(data)) {
-        return data;
-      } else if (data && Array.isArray(data.messages)) {
-        return data.messages;
-      } else if (data === null || data === undefined) {
-        // API returns null when no messages exist - this is normal
-        return [];
-      } else {
-        console.warn('Unexpected messages response format:', data);
-        return [];
-      }
+      return await response.json();
     } catch (error) {
       console.error('Error fetching messages:', error);
-      return []; // Return empty array instead of throwing
+      throw error;
     }
   }
 
@@ -738,9 +609,8 @@ class TaubyteService {
     try {
       const canvas = await this.getCanvas();
       if (canvas) {
-        this.gameStore.setCanvas(canvas);
+        this.emit('canvasUpdate', canvas);
       }
-      // Silently ignore null responses (API errors are already logged in getCanvas)
     } catch (error) {
       console.error('Error polling canvas:', error);
     }
