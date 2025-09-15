@@ -1,30 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 
-const Chat = () => {
-  const [messages, setMessages] = useState([
-    {
-      id: 1,
-      username: 'System',
-      message: 'Welcome to Pixel Collab! Start drawing and chatting with others.',
-      timestamp: new Date(),
-      type: 'system'
-    },
-    {
-      id: 2,
-      username: 'Alice',
-      message: 'Hey everyone! Let\'s create something amazing together! 🎨',
-      timestamp: new Date(Date.now() - 300000),
-      type: 'user'
-    },
-    {
-      id: 3,
-      username: 'Bob',
-      message: 'I love the gradient background we\'re working on!',
-      timestamp: new Date(Date.now() - 180000),
-      type: 'user'
-    }
-  ])
-  
+const Chat = ({ messages, onSendMessage }) => {
   const [newMessage, setNewMessage] = useState('')
   const messagesEndRef = useRef(null)
 
@@ -39,20 +15,13 @@ const Chat = () => {
   const handleSendMessage = (e) => {
     e.preventDefault()
     if (newMessage.trim()) {
-      const message = {
-        id: messages.length + 1,
-        username: 'You',
-        message: newMessage.trim(),
-        timestamp: new Date(),
-        type: 'user'
-      }
-      setMessages([...messages, message])
+      onSendMessage(newMessage.trim())
       setNewMessage('')
     }
   }
 
   const formatTime = (timestamp) => {
-    return timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    return new Date(timestamp * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
   }
 
   return (
@@ -63,39 +32,34 @@ const Chat = () => {
           <span className="text-xl">💬</span>
           Chat
         </h3>
-        <p className="text-gray-300 text-sm">3 online</p>
+        <p className="text-gray-300 text-sm">Pixel Collab Chat</p>
       </div>
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto p-4 space-y-3 scrollbar-thin scrollbar-thumb-white/20 scrollbar-track-transparent">
-        {messages.map((msg) => (
-          <div
-            key={msg.id}
-            className={`flex flex-col ${
-              msg.type === 'system' ? 'items-center' : 'items-start'
-            }`}
-          >
-            {msg.type === 'system' ? (
-              <div className="bg-blue-500/20 text-blue-200 text-sm px-3 py-2 rounded-lg max-w-full">
-                {msg.message}
-              </div>
-            ) : (
-            <div className="bg-white/10 backdrop-blur-sm rounded-lg p-3 max-w-full hover:bg-white/15 transition-colors duration-200">
-              <div className="flex items-center gap-2 mb-1">
-                <span className="font-semibold text-white text-sm">
-                  {msg.username}
-                </span>
-                <span className="text-gray-400 text-xs">
-                  {formatTime(msg.timestamp)}
-                </span>
-              </div>
-              <p className="text-gray-200 text-sm break-words leading-relaxed">
-                {msg.message}
-              </p>
-            </div>
-            )}
+        {messages.length === 0 ? (
+          <div className="text-center text-gray-400 text-sm py-8">
+            No messages yet. Start the conversation!
           </div>
-        ))}
+        ) : (
+          messages.map((msg) => (
+            <div key={msg.id} className="flex flex-col items-start">
+              <div className="bg-white/10 backdrop-blur-sm rounded-lg p-3 max-w-full hover:bg-white/15 transition-colors duration-200">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="font-semibold text-white text-sm">
+                    {msg.username}
+                  </span>
+                  <span className="text-gray-400 text-xs">
+                    {formatTime(msg.timestamp)}
+                  </span>
+                </div>
+                <p className="text-gray-200 text-sm break-words leading-relaxed">
+                  {msg.message}
+                </p>
+              </div>
+            </div>
+          ))
+        )}
         <div ref={messagesEndRef} />
       </div>
 

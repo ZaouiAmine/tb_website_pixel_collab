@@ -1,13 +1,12 @@
 import { useRef, useEffect, useState } from 'react'
 
-const PixelCanvas = ({ selectedColor }) => {
+const PixelCanvas = ({ selectedColor, pixels, onPixelPlace }) => {
   const canvasRef = useRef(null)
   const [isDrawing, setIsDrawing] = useState(false)
-  const [pixels, setPixels] = useState({})
   
   // Canvas dimensions - make it responsive to container
   const PIXEL_SIZE = 8
-  const GRID_WIDTH = 90  // 80x80 grid for more pixels
+  const GRID_WIDTH = 90  // 90x90 grid for more pixels
   const GRID_HEIGHT = 90
   const CANVAS_WIDTH = GRID_WIDTH * PIXEL_SIZE
   const CANVAS_HEIGHT = GRID_HEIGHT * PIXEL_SIZE
@@ -19,6 +18,9 @@ const PixelCanvas = ({ selectedColor }) => {
     // Set canvas size
     canvas.width = CANVAS_WIDTH
     canvas.height = CANVAS_HEIGHT
+    
+    // Clear canvas
+    ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT)
     
     // Draw grid
     drawGrid(ctx)
@@ -64,26 +66,22 @@ const PixelCanvas = ({ selectedColor }) => {
     return { x, y }
   }
 
-  const drawPixel = (x, y) => {
+  const placePixel = (x, y) => {
     if (x >= 0 && x < GRID_WIDTH && y >= 0 && y < GRID_HEIGHT) {
-      const key = `${x},${y}`
-      setPixels(prev => ({
-        ...prev,
-        [key]: selectedColor
-      }))
+      onPixelPlace(x, y, selectedColor)
     }
   }
 
   const handleMouseDown = (event) => {
     setIsDrawing(true)
     const { x, y } = getPixelCoordinates(event)
-    drawPixel(x, y)
+    placePixel(x, y)
   }
 
   const handleMouseMove = (event) => {
     if (isDrawing) {
       const { x, y } = getPixelCoordinates(event)
-      drawPixel(x, y)
+      placePixel(x, y)
     }
   }
 
