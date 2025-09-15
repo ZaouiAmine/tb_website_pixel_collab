@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useWebSocket } from './useWebSocket'
 
-const API_BASE = 'http://localhost:11005/api' // Adjust this to your backend URL
+const API_BASE = `${window.location.origin}/api` // Use same origin as frontend
 const ROOM = 'main' // Default room
 
 export const usePixelGame = () => {
