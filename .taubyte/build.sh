@@ -5,9 +5,9 @@ set -e
 
 echo "Starting React + Vite frontend build process..."
 
-# Install dependencies
+# Install dependencies (including dev dependencies for build tools)
 echo "Installing dependencies..."
-npm ci --only=production
+npm ci
 
 # Build the React application for production
 echo "Building React application..."
