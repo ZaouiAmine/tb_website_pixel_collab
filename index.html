@@ -1,0 +1,753 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pixel Collaboration Game</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .header {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            padding: 1rem;
+            text-align: center;
+            color: white;
+            box-shadow: 0 2px 20px rgba(0, 0, 0, 0.1);
+        }
+
+        .header h1 {
+            font-size: 2rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .header p {
+            opacity: 0.8;
+        }
+
+        .main-container {
+            flex: 1;
+            display: flex;
+            gap: 1rem;
+            padding: 1rem;
+            max-width: 1400px;
+            margin: 0 auto;
+            width: 100%;
+        }
+
+        .left-panel {
+            width: 300px;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .right-panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .panel {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            padding: 1.5rem;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            backdrop-filter: blur(10px);
+        }
+
+        .panel h3 {
+            color: #333;
+            margin-bottom: 1rem;
+            font-size: 1.2rem;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 0.5rem;
+        }
+
+        .user-info {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .input-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .input-group label {
+            font-weight: 600;
+            color: #555;
+        }
+
+        .input-group input {
+            padding: 0.75rem;
+            border: 2px solid #e1e5e9;
+            border-radius: 8px;
+            font-size: 1rem;
+            transition: border-color 0.3s;
+        }
+
+        .input-group input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .color-picker {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .color-preview {
+            width: 40px;
+            height: 40px;
+            border-radius: 8px;
+            border: 3px solid #fff;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+        }
+
+        .color-input {
+            width: 60px;
+            height: 40px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+
+        .button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .button:active {
+            transform: translateY(0);
+        }
+
+        .button.secondary {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        }
+
+        .button.secondary:hover {
+            box-shadow: 0 4px 15px rgba(245, 87, 108, 0.4);
+        }
+
+        .canvas-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .canvas-wrapper {
+            border: 3px solid #fff;
+            border-radius: 15px;
+            padding: 1rem;
+            background: rgba(255, 255, 255, 0.9);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+
+        #pixelCanvas {
+            border: 2px solid #333;
+            border-radius: 8px;
+            cursor: crosshair;
+            image-rendering: pixelated;
+            background: white;
+        }
+
+        .canvas-info {
+            text-align: center;
+            color: #666;
+        }
+
+        .chat-container {
+            height: 300px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .chat-messages {
+            flex: 1;
+            border: 2px solid #e1e5e9;
+            border-radius: 8px;
+            padding: 1rem;
+            overflow-y: auto;
+            background: #f8f9fa;
+            margin-bottom: 1rem;
+        }
+
+        .message {
+            margin-bottom: 0.5rem;
+            padding: 0.5rem;
+            border-radius: 8px;
+            background: white;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+
+        .message-header {
+            font-weight: 600;
+            color: #667eea;
+            font-size: 0.9rem;
+        }
+
+        .message-content {
+            margin-top: 0.25rem;
+            color: #333;
+        }
+
+        .message-time {
+            font-size: 0.8rem;
+            color: #999;
+            margin-top: 0.25rem;
+        }
+
+        .chat-input {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .chat-input input {
+            flex: 1;
+            padding: 0.75rem;
+            border: 2px solid #e1e5e9;
+            border-radius: 8px;
+            font-size: 1rem;
+        }
+
+        .users-list {
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .user-item {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.5rem;
+            border-radius: 8px;
+            margin-bottom: 0.5rem;
+            background: #f8f9fa;
+            transition: background-color 0.2s;
+        }
+
+        .user-item:hover {
+            background: #e9ecef;
+        }
+
+        .user-color {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            border: 2px solid #fff;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+        }
+
+        .user-name {
+            font-weight: 600;
+            color: #333;
+        }
+
+        .user-status {
+            font-size: 0.8rem;
+            color: #28a745;
+            margin-left: auto;
+        }
+
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+            padding: 0.75rem;
+            border-radius: 8px;
+            background: #f8f9fa;
+        }
+
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #dc3545;
+        }
+
+        .status-dot.connected {
+            background: #28a745;
+        }
+
+        .status-text {
+            font-weight: 600;
+            color: #333;
+        }
+
+        .tools {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+        }
+
+        @media (max-width: 768px) {
+            .main-container {
+                flex-direction: column;
+            }
+            
+            .left-panel {
+                width: 100%;
+            }
+            
+            #pixelCanvas {
+                width: 100%;
+                max-width: 400px;
+                height: auto;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🎨 Pixel Collaboration Game</h1>
+        <p>Draw together in real-time with friends!</p>
+    </div>
+
+    <div class="main-container">
+        <div class="left-panel">
+            <!-- User Info Panel -->
+            <div class="panel">
+                <h3>👤 Your Profile</h3>
+                <div class="user-info">
+                    <div class="input-group">
+                        <label for="username">Username</label>
+                        <input type="text" id="username" placeholder="Enter your username" value="Player">
+                    </div>
+                    <div class="input-group">
+                        <label for="userColor">Drawing Color</label>
+                        <div class="color-picker">
+                            <div class="color-preview" id="colorPreview"></div>
+                            <input type="color" id="userColor" class="color-input" value="#ff0000">
+                        </div>
+                    </div>
+                    <button class="button" onclick="updateUserProfile()">Update Profile</button>
+                </div>
+            </div>
+
+            <!-- Connection Status -->
+            <div class="panel">
+                <h3>🔌 Connection</h3>
+                <div class="status-indicator">
+                    <div class="status-dot" id="statusDot"></div>
+                    <span class="status-text" id="statusText">Connecting...</span>
+                </div>
+                <div class="tools">
+                    <button class="button" onclick="connectWebSocket()">Connect</button>
+                    <button class="button secondary" onclick="disconnectWebSocket()">Disconnect</button>
+                </div>
+            </div>
+
+            <!-- Online Users -->
+            <div class="panel">
+                <h3>👥 Online Users</h3>
+                <div class="users-list" id="usersList">
+                    <div class="user-item">
+                        <div class="user-color" style="background-color: #999;"></div>
+                        <span class="user-name">Loading...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="right-panel">
+            <!-- Canvas Panel -->
+            <div class="panel">
+                <h3>🎨 Collaborative Canvas</h3>
+                <div class="canvas-container">
+                    <div class="canvas-wrapper">
+                        <canvas id="pixelCanvas" width="500" height="500"></canvas>
+                    </div>
+                    <div class="canvas-info">
+                        <p>Click and drag to draw pixels</p>
+                        <p>Canvas: 100x100 pixels</p>
+                    </div>
+                    <div class="tools">
+                        <button class="button" onclick="loadCanvas()">Load Canvas</button>
+                        <button class="button secondary" onclick="clearCanvas()">Clear Canvas</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Chat Panel -->
+            <div class="panel">
+                <h3>💬 Chat</h3>
+                <div class="chat-container">
+                    <div class="chat-messages" id="chatMessages">
+                        <div class="message">
+                            <div class="message-header">System</div>
+                            <div class="message-content">Welcome to the pixel collaboration game!</div>
+                            <div class="message-time">Just now</div>
+                        </div>
+                    </div>
+                    <div class="chat-input">
+                        <input type="text" id="chatInput" placeholder="Type a message..." onkeypress="handleChatKeyPress(event)">
+                        <button class="button" onclick="sendMessage()">Send</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Global variables
+        let websocket = null;
+        let canvas = null;
+        let ctx = null;
+        let isDrawing = false;
+        let currentUser = {
+            id: 'user_' + Math.random().toString(36).substr(2, 9),
+            username: 'Player',
+            color: '#ff0000'
+        };
+        let baseURL = 'https://tv62dspc1.g.k8s.cyou';
+
+        // Initialize the application
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeCanvas();
+            updateColorPreview();
+            loadCanvas();
+            connectWebSocket();
+        });
+
+        // Canvas initialization
+        function initializeCanvas() {
+            canvas = document.getElementById('pixelCanvas');
+            ctx = canvas.getContext('2d');
+            
+            // Set up canvas event listeners
+            canvas.addEventListener('mousedown', startDrawing);
+            canvas.addEventListener('mousemove', draw);
+            canvas.addEventListener('mouseup', stopDrawing);
+            canvas.addEventListener('mouseout', stopDrawing);
+            
+            // Touch events for mobile
+            canvas.addEventListener('touchstart', handleTouch);
+            canvas.addEventListener('touchmove', handleTouch);
+            canvas.addEventListener('touchend', stopDrawing);
+        }
+
+        // Drawing functions
+        function startDrawing(e) {
+            isDrawing = true;
+            draw(e);
+        }
+
+        function draw(e) {
+            if (!isDrawing) return;
+            
+            const rect = canvas.getBoundingClientRect();
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            
+            const x = Math.floor((e.clientX - rect.left) * scaleX);
+            const y = Math.floor((e.clientY - rect.top) * scaleY);
+            
+            // Draw pixel
+            ctx.fillStyle = currentUser.color;
+            ctx.fillRect(x, y, 1, 1);
+            
+            // Send pixel update via WebSocket
+            if (websocket && websocket.readyState === WebSocket.OPEN) {
+                const pixel = {
+                    x: x,
+                    y: y,
+                    color: currentUser.color,
+                    userId: currentUser.id,
+                    username: currentUser.username
+                };
+                
+                websocket.send(JSON.stringify({
+                    type: 'pixel',
+                    data: pixel
+                }));
+            }
+        }
+
+        function stopDrawing() {
+            isDrawing = false;
+        }
+
+        function handleTouch(e) {
+            e.preventDefault();
+            const touch = e.touches[0];
+            const mouseEvent = new MouseEvent(e.type === 'touchstart' ? 'mousedown' : 
+                                            e.type === 'touchmove' ? 'mousemove' : 'mouseup', {
+                clientX: touch.clientX,
+                clientY: touch.clientY
+            });
+            canvas.dispatchEvent(mouseEvent);
+        }
+
+        // WebSocket functions
+        async function connectWebSocket() {
+            if (websocket && websocket.readyState === WebSocket.OPEN) {
+                return;
+            }
+            
+            updateStatus('connecting', 'Connecting...');
+            
+            try {
+                // Get WebSocket URL from backend
+                const response = await fetch(`${baseURL}/api/getWebSocketURL?room=pixelupdates`);
+                const data = await response.json();
+                
+                const wsPath = data.websocket_url;
+                const wsURL = baseURL.replace('https://', 'wss://') + '/' + wsPath;
+                
+                websocket = new WebSocket(wsURL);
+                
+                websocket.onopen = function() {
+                    updateStatus('connected', 'Connected');
+                    loadUsers();
+                    loadMessages();
+                };
+                
+                websocket.onmessage = function(event) {
+                    if (event.data instanceof Blob) {
+                        event.data.text().then(text => {
+                            try {
+                                const message = JSON.parse(text);
+                                handleWebSocketMessage(message);
+                            } catch (e) {
+                                console.log('Non-JSON blob message:', text);
+                            }
+                        });
+                    } else {
+                        try {
+                            const message = JSON.parse(event.data);
+                            handleWebSocketMessage(message);
+                        } catch (e) {
+                            console.log('Non-JSON text message:', event.data);
+                        }
+                    }
+                };
+                
+                websocket.onclose = function() {
+                    updateStatus('disconnected', 'Disconnected');
+                };
+                
+                websocket.onerror = function(error) {
+                    updateStatus('error', 'Connection Error');
+                    console.error('WebSocket error:', error);
+                };
+                
+            } catch (error) {
+                updateStatus('error', 'Failed to connect');
+                console.error('Connection error:', error);
+            }
+        }
+
+        function disconnectWebSocket() {
+            if (websocket) {
+                websocket.close();
+                websocket = null;
+            }
+            updateStatus('disconnected', 'Disconnected');
+        }
+
+        function handleWebSocketMessage(message) {
+            if (message.type === 'pixel') {
+                // Update canvas with received pixel
+                const pixel = message.data;
+                ctx.fillStyle = pixel.color;
+                ctx.fillRect(pixel.x, pixel.y, 1, 1);
+            } else if (message.type === 'user') {
+                loadUsers();
+            } else if (message.type === 'message') {
+                loadMessages();
+            }
+        }
+
+        // API functions
+        async function loadCanvas() {
+            try {
+                const response = await fetch(`${baseURL}/api/getCanvas`);
+                const canvasData = await response.json();
+                
+                // Clear canvas
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                
+                // Draw canvas data
+                canvasData.forEach((row, y) => {
+                    row.forEach((pixel, x) => {
+                        if (pixel.color && pixel.color !== '#ffffff') {
+                            ctx.fillStyle = pixel.color;
+                            ctx.fillRect(x * 5, y * 5, 5, 5); // Scale up for visibility
+                        }
+                    });
+                });
+                
+            } catch (error) {
+                console.error('Error loading canvas:', error);
+            }
+        }
+
+        async function clearCanvas() {
+            try {
+                await fetch(`${baseURL}/api/resetCanvas`);
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                addChatMessage('System', 'Canvas has been cleared!');
+            } catch (error) {
+                console.error('Error clearing canvas:', error);
+            }
+        }
+
+        async function loadUsers() {
+            try {
+                const response = await fetch(`${baseURL}/api/getUsers`);
+                const users = await response.json();
+                
+                const usersList = document.getElementById('usersList');
+                usersList.innerHTML = '';
+                
+                users.forEach(user => {
+                    const userDiv = document.createElement('div');
+                    userDiv.className = 'user-item';
+                    userDiv.innerHTML = `
+                        <div class="user-color" style="background-color: ${user.color}"></div>
+                        <span class="user-name">${user.username}</span>
+                        <span class="user-status">${user.online ? 'Online' : 'Offline'}</span>
+                    `;
+                    usersList.appendChild(userDiv);
+                });
+                
+            } catch (error) {
+                console.error('Error loading users:', error);
+            }
+        }
+
+        async function loadMessages() {
+            try {
+                const response = await fetch(`${baseURL}/api/getMessages`);
+                const messages = await response.json();
+                
+                const chatMessages = document.getElementById('chatMessages');
+                chatMessages.innerHTML = '';
+                
+                messages.forEach(message => {
+                    addChatMessage(message.username, message.message, new Date(message.timestamp * 1000));
+                });
+                
+            } catch (error) {
+                console.error('Error loading messages:', error);
+            }
+        }
+
+        function sendMessage() {
+            const chatInput = document.getElementById('chatInput');
+            const message = chatInput.value.trim();
+            
+            if (message && websocket && websocket.readyState === WebSocket.OPEN) {
+                const chatMessage = {
+                    userId: currentUser.id,
+                    username: currentUser.username,
+                    message: message,
+                    timestamp: Math.floor(Date.now() / 1000)
+                };
+                
+                websocket.send(JSON.stringify({
+                    type: 'message',
+                    data: chatMessage
+                }));
+                
+                chatInput.value = '';
+            }
+        }
+
+        function handleChatKeyPress(event) {
+            if (event.key === 'Enter') {
+                sendMessage();
+            }
+        }
+
+        function addChatMessage(username, message, timestamp = new Date()) {
+            const chatMessages = document.getElementById('chatMessages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'message';
+            messageDiv.innerHTML = `
+                <div class="message-header">${username}</div>
+                <div class="message-content">${message}</div>
+                <div class="message-time">${timestamp.toLocaleTimeString()}</div>
+            `;
+            chatMessages.appendChild(messageDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        // User management
+        function updateUserProfile() {
+            const username = document.getElementById('username').value.trim();
+            const color = document.getElementById('userColor').value;
+            
+            if (username) {
+                currentUser.username = username;
+                currentUser.color = color;
+                updateColorPreview();
+                
+                // Send user update via WebSocket
+                if (websocket && websocket.readyState === WebSocket.OPEN) {
+                    websocket.send(JSON.stringify({
+                        type: 'user',
+                        data: {
+                            id: currentUser.id,
+                            username: currentUser.username,
+                            color: currentUser.color,
+                            online: true
+                        }
+                    }));
+                }
+                
+                addChatMessage('System', `${username} joined the game!`);
+            }
+        }
+
+        function updateColorPreview() {
+            const colorPreview = document.getElementById('colorPreview');
+            colorPreview.style.backgroundColor = currentUser.color;
+        }
+
+        function updateStatus(status, text) {
+            const statusDot = document.getElementById('statusDot');
+            const statusText = document.getElementById('statusText');
+            
+            statusDot.className = 'status-dot ' + (status === 'connected' ? 'connected' : '');
+            statusText.textContent = text;
+        }
+
+        // Update color preview when color picker changes
+        document.getElementById('userColor').addEventListener('change', function() {
+            updateColorPreview();
+        });
+    </script>
+</body>
+</html>
