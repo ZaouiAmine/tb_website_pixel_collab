@@ -61,10 +61,10 @@ export const usePixelGame = () => {
         console.log('Raw pixel URL from backend:', pixelUrl)
         console.log('Raw chat URL from backend:', chatUrl)
         
-        // Construct WebSocket URLs using window.location.origin with /api/ prefix
+        // Construct WebSocket URLs using window.location.origin (backend already includes ws- prefix)
         const wsBaseUrl = window.location.origin.replace('http', 'ws')
-        const finalPixelUrl = `${wsBaseUrl}/api/${pixelUrl}`
-        const finalChatUrl = `${wsBaseUrl}/api/${chatUrl}`
+        const finalPixelUrl = `${wsBaseUrl}/${pixelUrl}`
+        const finalChatUrl = `${wsBaseUrl}/${chatUrl}`
         
         console.log('Final pixel WebSocket URL:', finalPixelUrl)
         console.log('Final chat WebSocket URL:', finalChatUrl)
