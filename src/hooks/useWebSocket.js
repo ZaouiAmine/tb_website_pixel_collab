@@ -31,6 +31,7 @@ export const useWebSocket = (url, onMessage) => {
             }
             
             const data = JSON.parse(messageData)
+            console.log('Parsed WebSocket data:', data)
             onMessage(data)
           } catch (err) {
             console.error('Error parsing WebSocket message:', err)

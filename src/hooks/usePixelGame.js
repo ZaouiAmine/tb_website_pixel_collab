@@ -138,6 +138,17 @@ export const usePixelGame = () => {
       room: ROOM
     }
     console.log('Placing pixel:', pixelData)
+    
+    // Optimistic update - update the pixel immediately in the frontend
+    setPixels(prev => {
+      const newPixels = {
+        ...prev,
+        [`${x},${y}`]: color
+      }
+      console.log('Optimistic pixel update:', newPixels)
+      return newPixels
+    })
+    
     sendPixelUpdate(pixelData)
   }, [sendPixelUpdate])
 
