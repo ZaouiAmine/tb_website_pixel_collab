@@ -58,10 +58,24 @@ export const usePixelGame = () => {
         const pixelUrl = await pixelResponse.text()
         const chatUrl = await chatResponse.text()
         
+        console.log('Raw pixel URL from backend:', pixelUrl)
+        console.log('Raw chat URL from backend:', chatUrl)
+        
         // Construct WebSocket URLs using window.location.origin with /api/ prefix
         const wsBaseUrl = window.location.origin.replace('http', 'ws')
-        setPixelChannelUrl(`${wsBaseUrl}/api/${pixelUrl}`)
-        setChatChannelUrl(`${wsBaseUrl}/api/${chatUrl}`)
+        const finalPixelUrl = `${wsBaseUrl}/api/${pixelUrl}`
+        const finalChatUrl = `${wsBaseUrl}/api/${chatUrl}`
+        
+        console.log('Final pixel WebSocket URL:', finalPixelUrl)
+        console.log('Final chat WebSocket URL:', finalChatUrl)
+        
+        setPixelChannelUrl(finalPixelUrl)
+        setChatChannelUrl(finalChatUrl)
+      } else {
+        console.error('Failed to get WebSocket URLs:', {
+          pixelStatus: pixelResponse.status,
+          chatStatus: chatResponse.status
+        })
       }
     } catch (error) {
       console.error('Error getting WebSocket URLs:', error)

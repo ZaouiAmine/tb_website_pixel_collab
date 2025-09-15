@@ -10,12 +10,13 @@ export const useWebSocket = (url, onMessage) => {
 
     const connect = () => {
       try {
+        console.log('Attempting to connect to WebSocket:', url)
         wsRef.current = new WebSocket(url)
         
         wsRef.current.onopen = () => {
           setIsConnected(true)
           setError(null)
-          console.log('WebSocket connected:', url)
+          console.log('WebSocket connected successfully:', url)
         }
 
         wsRef.current.onmessage = (event) => {
@@ -27,16 +28,25 @@ export const useWebSocket = (url, onMessage) => {
           }
         }
 
-        wsRef.current.onclose = () => {
+        wsRef.current.onclose = (event) => {
           setIsConnected(false)
-          console.log('WebSocket disconnected')
+          console.log('WebSocket disconnected:', {
+            code: event.code,
+            reason: event.reason,
+            wasClean: event.wasClean,
+            url: url
+          })
           // Attempt to reconnect after 3 seconds
           setTimeout(connect, 3000)
         }
 
         wsRef.current.onerror = (error) => {
           setError(error)
-          console.error('WebSocket error:', error)
+          console.error('WebSocket error:', {
+            error: error,
+            url: url,
+            readyState: wsRef.current?.readyState
+          })
         }
       } catch (err) {
         setError(err)
