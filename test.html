@@ -372,7 +372,7 @@
         });
         
         // WebSocket functions
-        function connectWebSocket() {
+        async function connectWebSocket() {
             if (websocket && websocket.readyState === WebSocket.OPEN) {
                 logResponse('realtimeResponse', 'WebSocket already connected');
                 return;
@@ -380,14 +380,23 @@
             
             updateWebSocketStatus('connecting', 'Connecting...');
             
-            // First get the WebSocket URL
-            getWebSocketURL().then(() => {
+            try {
+                // First get the WebSocket URL
+                await getWebSocketURL();
                 const wsURL = document.getElementById('websocketResponse').textContent;
                 const urlMatch = wsURL.match(/"websocket_url":"([^"]+)"/);
                 
                 if (urlMatch) {
                     const wsPath = urlMatch[1];
-                    const fullWsURL = baseURL.replace('http', 'ws') + wsPath;
+                    // Ensure proper WebSocket URL construction
+                    let fullWsURL;
+                    if (baseURL.startsWith('https://')) {
+                        fullWsURL = baseURL.replace('https://', 'wss://') + wsPath;
+                    } else {
+                        fullWsURL = baseURL.replace('http://', 'ws://') + wsPath;
+                    }
+                    
+                    logResponse('realtimeResponse', 'Attempting to connect to: ' + fullWsURL);
                     
                     websocket = new WebSocket(fullWsURL);
                     
@@ -424,9 +433,12 @@
                     };
                 } else {
                     updateWebSocketStatus('disconnected', 'Failed to get WebSocket URL');
-                    logResponse('realtimeResponse', 'Failed to parse WebSocket URL from response');
+                    logResponse('realtimeResponse', 'Failed to parse WebSocket URL from response: ' + wsURL);
                 }
-            });
+            } catch (error) {
+                updateWebSocketStatus('disconnected', 'Error');
+                logResponse('realtimeResponse', 'Error getting WebSocket URL: ' + error.message);
+            }
         }
         
         function disconnectWebSocket() {
@@ -658,8 +670,10 @@
                 const response = await makeRequest(`/getWebSocketURL?room=${room}`);
                 document.getElementById('websocketResponse').textContent = response;
                 logResponse('websocketResponse', 'WebSocket URL retrieved successfully');
+                return response; // Return the response for use in connectWebSocket
             } catch (error) {
                 logResponse('websocketResponse', 'Error: ' + error.message);
+                throw error; // Re-throw to handle in connectWebSocket
             }
         }
         
