@@ -238,6 +238,7 @@
                 <span id="wsStatusText">WebSocket: Disconnected</span>
             </div>
             <div class="button-group">
+                <button class="btn-primary" onclick="testBackendConnection()">Test Backend</button>
                 <button class="btn-primary" onclick="connectWebSocket()">Connect WebSocket</button>
                 <button class="btn-danger" onclick="disconnectWebSocket()">Disconnect</button>
             </div>
@@ -371,6 +372,28 @@
             logResponse('realtimeResponse', '✅ Page loaded successfully. Ready to test backend at: ' + baseURL);
         });
         
+        // Backend connection test
+        async function testBackendConnection() {
+            logResponse('realtimeResponse', 'Testing backend connection...');
+            logResponse('realtimeResponse', `Current baseURL: ${baseURL}`);
+            
+            try {
+                // Test a simple endpoint first
+                const response = await makeRequest('/api/getCanvas');
+                logResponse('realtimeResponse', '✅ Backend is responding! Canvas endpoint works.');
+                logResponse('realtimeResponse', `Response length: ${response.length} characters`);
+                
+                if (response.trim().startsWith('<!DOCTYPE html>')) {
+                    logResponse('realtimeResponse', '⚠️ WARNING: Backend returned HTML instead of JSON data');
+                    logResponse('realtimeResponse', 'This suggests the backend functions may not be properly deployed');
+                } else {
+                    logResponse('realtimeResponse', '✅ Backend returned JSON data as expected');
+                }
+            } catch (error) {
+                logResponse('realtimeResponse', '❌ Backend connection failed: ' + error.message);
+            }
+        }
+        
         // WebSocket functions
         async function connectWebSocket() {
             if (websocket && websocket.readyState === WebSocket.OPEN) {
@@ -499,7 +522,7 @@
         // Canvas functions
         async function getCanvas() {
             try {
-                const response = await makeRequest('/getCanvas');
+                const response = await makeRequest('/api/getCanvas');
                 document.getElementById('canvasResponse').textContent = response;
                 updateCanvasDisplay();
                 document.getElementById('canvasLastUpdate').textContent = new Date().toLocaleTimeString();
@@ -511,7 +534,7 @@
         
         async function initCanvas() {
             try {
-                const response = await makeRequest('/initCanvas');
+                const response = await makeRequest('/api/initCanvas');
                 document.getElementById('canvasResponse').textContent = response;
                 logResponse('canvasResponse', 'Canvas initialized successfully');
                 getCanvas(); // Refresh canvas display
@@ -522,7 +545,7 @@
         
         async function resetCanvas() {
             try {
-                const response = await makeRequest('/resetCanvas');
+                const response = await makeRequest('/api/resetCanvas');
                 document.getElementById('canvasResponse').textContent = response;
                 logResponse('canvasResponse', 'Canvas reset successfully');
                 getCanvas(); // Refresh canvas display
@@ -553,7 +576,7 @@
         // User functions
         async function getUsers() {
             try {
-                const response = await makeRequest('/getUsers');
+                const response = await makeRequest('/api/getUsers');
                 document.getElementById('usersResponse').textContent = response;
                 displayUsers(response);
                 logResponse('usersResponse', 'Users data retrieved successfully');
@@ -609,7 +632,7 @@
         // Message functions
         async function getMessages() {
             try {
-                const response = await makeRequest('/getMessages');
+                const response = await makeRequest('/api/getMessages');
                 document.getElementById('messagesResponse').textContent = response;
                 displayMessages(response);
                 logResponse('messagesResponse', 'Messages data retrieved successfully');
@@ -667,7 +690,18 @@
         async function getWebSocketURL() {
             try {
                 const room = document.getElementById('roomName').value;
-                const response = await makeRequest(`/getWebSocketURL?room=${room}`);
+                logResponse('websocketResponse', `Attempting to get WebSocket URL for room: ${room}`);
+                logResponse('websocketResponse', `Making request to: ${baseURL}/api/getWebSocketURL?room=${room}`);
+                
+                const response = await makeRequest(`/api/getWebSocketURL?room=${room}`);
+                
+                logResponse('websocketResponse', `Raw response received: ${response.substring(0, 200)}...`);
+                
+                // Check if we got HTML instead of JSON
+                if (response.trim().startsWith('<!DOCTYPE html>')) {
+                    throw new Error('Received HTML instead of JSON - backend endpoint may not be working');
+                }
+                
                 document.getElementById('websocketResponse').textContent = response;
                 logResponse('websocketResponse', 'WebSocket URL retrieved successfully');
                 return response; // Return the response for use in connectWebSocket
