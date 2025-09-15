@@ -149,6 +149,7 @@ export const usePixelGame = () => {
       return newPixels
     })
     
+    // Send pixel directly via WebSocket
     sendPixelUpdate(pixelData)
   }, [sendPixelUpdate])
 
@@ -160,6 +161,20 @@ export const usePixelGame = () => {
       username,
       room: ROOM
     }
+    
+    console.log('Sending chat message:', messageData)
+    
+    // Optimistic update - add message immediately to frontend
+    const chatMessage = {
+      id: Date.now().toString(),
+      userId,
+      username,
+      message,
+      timestamp: Math.floor(Date.now() / 1000)
+    }
+    setMessages(prev => [...prev, chatMessage])
+    
+    // Send message directly via WebSocket
     sendChatMessage(messageData)
   }, [sendChatMessage])
 
