@@ -8,7 +8,7 @@ let currentUser = {
     username: 'Player',
     color: '#ff0000'
 };
-let baseURL = 'https://tv62dspc1.g.k8s.cyou';
+let baseURL = window.location.origin;
 
 // Initialize the application
 document.addEventListener('DOMContentLoaded', function() {
