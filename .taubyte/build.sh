@@ -1,9 +1,13 @@
 #!/bin/bash
 
-# Copy the test.html file to the output directory
-cp test.html /out/index.html
+# Copy all frontend files to the output directory
+cp index.html /out/
+cp styles.css /out/
+cp script.js /out/
 
-# Create a simple directory structure for serving
+# Create assets directory for any additional resources
 mkdir -p /out/assets
+
 echo "Frontend build completed successfully"
+echo "Files copied: index.html, styles.css, script.js"
 exit 0
