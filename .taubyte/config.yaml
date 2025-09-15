@@ -1,6 +1,7 @@
 version: 1.00
 environment:
-  image: alpine:latest
+  image: node:18-alpine
   variables:
+    NODE_ENV: production
 workflow:
   - build

@@ -1,102 +1,13 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Pixel Collaboration Game</title>
-    <link rel="stylesheet" href="styles.css">
-</head>
-<body>
-    <div class="header">
-        <h1>🎨 Pixel Collaboration Game</h1>
-        <p>Draw together in real-time with friends!</p>
-    </div>
-
-    <div class="main-container">
-        <div class="left-panel">
-            <!-- User Info Panel -->
-            <div class="panel">
-                <h3>👤 Your Profile</h3>
-                <div class="user-info">
-                    <div class="input-group">
-                        <label for="username">Username</label>
-                        <input type="text" id="username" placeholder="Enter your username" value="Player">
-                    </div>
-                    <div class="input-group">
-                        <label for="userColor">Drawing Color</label>
-                        <div class="color-picker">
-                            <div class="color-preview" id="colorPreview"></div>
-                            <input type="color" id="userColor" class="color-input" value="#ff0000">
-                        </div>
-                    </div>
-                    <button class="button" onclick="updateUserProfile()">Update Profile</button>
-                </div>
-            </div>
-
-            <!-- Connection Status -->
-            <div class="panel">
-                <h3>🔌 Connection</h3>
-                <div class="status-indicator">
-                    <div class="status-dot" id="statusDot"></div>
-                    <span class="status-text" id="statusText">Connecting...</span>
-                </div>
-                <div class="tools">
-                    <button class="button" onclick="connectWebSocket()">Connect</button>
-                    <button class="button secondary" onclick="disconnectWebSocket()">Disconnect</button>
-                </div>
-            </div>
-
-            <!-- Online Users -->
-            <div class="panel">
-                <h3>👥 Online Users</h3>
-                <div class="users-list" id="usersList">
-                    <div class="user-item">
-                        <div class="user-color" style="background-color: #999;"></div>
-                        <span class="user-name">Loading...</span>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="right-panel">
-            <!-- Canvas Panel -->
-            <div class="panel">
-                <h3>🎨 Collaborative Canvas</h3>
-                <div class="canvas-container">
-                    <div class="canvas-wrapper">
-                        <canvas id="pixelCanvas" width="500" height="500"></canvas>
-                    </div>
-                    <div class="canvas-info">
-                        <p>Click and drag to draw pixels</p>
-                        <p>Canvas: 100x100 pixels</p>
-                    </div>
-                    <div class="tools">
-                        <button class="button" onclick="refreshCanvas()">Load Canvas</button>
-                        <button class="button secondary" onclick="clearCanvas()">Clear Canvas</button>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Chat Panel -->
-            <div class="panel">
-                <h3>💬 Chat</h3>
-                <div class="chat-container">
-                    <div class="chat-messages" id="chatMessages">
-                        <div class="message">
-                            <div class="message-header">System</div>
-                            <div class="message-content">Welcome to the pixel collaboration game!</div>
-                            <div class="message-time">Just now</div>
-                        </div>
-                    </div>
-                    <div class="chat-input">
-                        <input type="text" id="chatInput" placeholder="Type a message..." onkeypress="handleChatKeyPress(event)">
-                        <button class="button" onclick="sendMessage()">Send</button>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <script src="script.js"></script>
-</body>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
 </html>
