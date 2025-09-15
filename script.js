@@ -76,10 +76,7 @@ function draw(e) {
                 username: currentUser.username
             };
             
-            websocket.send(JSON.stringify({
-                type: 'pixel',
-                data: pixel
-            }));
+            websocket.send(JSON.stringify(pixel));
         }
     }
 }
@@ -131,35 +128,22 @@ async function connectWebSocket() {
             
             // Send user profile to backend when connected
             if (currentUser.username) {
-                websocket.send(JSON.stringify({
-                    type: 'user',
-                    data: {
-                        id: currentUser.id,
-                        username: currentUser.username,
-                        color: currentUser.color,
-                        online: true
-                    }
-                }));
+                const userData = {
+                    id: currentUser.id,
+                    username: currentUser.username,
+                    color: currentUser.color,
+                    online: true
+                };
+                websocket.send(JSON.stringify(userData));
             }
         };
         
         websocket.onmessage = function(event) {
-            if (event.data instanceof Blob) {
-                event.data.text().then(text => {
-                    try {
-                        const message = JSON.parse(text);
-                        handleWebSocketMessage(message);
-                    } catch (e) {
-                        console.log('Non-JSON blob message:', text);
-                    }
-                });
-            } else {
-                try {
-                    const message = JSON.parse(event.data);
-                    handleWebSocketMessage(message);
-                } catch (e) {
-                    console.log('Non-JSON text message:', event.data);
-                }
+            try {
+                const data = JSON.parse(event.data);
+                handleWebSocketMessage(data);
+            } catch (e) {
+                console.log('Non-JSON message:', event.data);
             }
         };
         
@@ -186,16 +170,18 @@ function disconnectWebSocket() {
     updateStatus('disconnected', 'Disconnected');
 }
 
-function handleWebSocketMessage(message) {
-    if (message.type === 'pixel') {
-        const pixel = message.data;
-        ctx.fillStyle = pixel.color;
-        ctx.fillRect(pixel.x * 5, pixel.y * 5, 5, 5);
-    } else if (message.type === 'user') {
+function handleWebSocketMessage(data) {
+    // Handle different types of messages based on data structure
+    if (data.x !== undefined && data.y !== undefined && data.color) {
+        // This is a pixel update
+        ctx.fillStyle = data.color;
+        ctx.fillRect(data.x * 5, data.y * 5, 5, 5);
+    } else if (data.id && data.username) {
+        // This is a user update
         loadUsers();
-    } else if (message.type === 'message') {
-        const chatMessage = message.data;
-        addChatMessage(chatMessage.username, chatMessage.message, new Date(chatMessage.timestamp * 1000));
+    } else if (data.message && data.username) {
+        // This is a chat message
+        addChatMessage(data.username, data.message, new Date(data.timestamp * 1000));
     }
 }
 
@@ -320,10 +306,7 @@ function sendMessage() {
             timestamp: Math.floor(Date.now() / 1000)
         };
         
-        websocket.send(JSON.stringify({
-            type: 'message',
-            data: chatMessage
-        }));
+        websocket.send(JSON.stringify(chatMessage));
         
         addChatMessage(currentUser.username, message);
         chatInput.value = '';
@@ -361,15 +344,13 @@ function updateUserProfile() {
         
         // Send user update via WebSocket
         if (websocket && websocket.readyState === WebSocket.OPEN) {
-            websocket.send(JSON.stringify({
-                type: 'user',
-                data: {
-                    id: currentUser.id,
-                    username: currentUser.username,
-                    color: currentUser.color,
-                    online: true
-                }
-            }));
+            const userData = {
+                id: currentUser.id,
+                username: currentUser.username,
+                color: currentUser.color,
+                online: true
+            };
+            websocket.send(JSON.stringify(userData));
         }
     }
 }
