@@ -15,13 +15,31 @@ document.addEventListener('DOMContentLoaded', function() {
     initializeCanvas();
     updateColorPreview();
     
-    // Load canvas first, then connect WebSocket
-    setTimeout(() => {
-        loadCanvas();
+    // Load initial state first, then connect WebSocket
+    setTimeout(async () => {
+        await loadInitialState();
         connectWebSocket();
-        addChatMessage('System', 'Welcome to the pixel collaboration game!');
     }, 100);
 });
+
+// Load initial state from backend
+async function loadInitialState() {
+    try {
+        // Load canvas, users, and messages in parallel
+        await Promise.all([
+            loadCanvas(),
+            loadUsers(),
+            loadMessages()
+        ]);
+        
+        // Add welcome message
+        addChatMessage('System', 'Welcome to the pixel collaboration game!');
+        console.log('Initial state loaded successfully');
+    } catch (error) {
+        console.error('Error loading initial state:', error);
+        addChatMessage('System', 'Error loading initial data. Please refresh the page.');
+    }
+}
 
 // Canvas initialization
 function initializeCanvas() {
@@ -77,6 +95,9 @@ function draw(e) {
             };
             
             websocket.send(JSON.stringify(pixel));
+            console.log('Sent pixel update:', pixel);
+        } else {
+            console.log('WebSocket not connected, cannot send pixel update');
         }
     }
 }
@@ -119,10 +140,7 @@ async function connectWebSocket() {
         
         websocket.onopen = function() {
             updateStatus('connected', 'Connected');
-            
-            // Load fresh data when connected
-            loadUsers();
-            loadMessages();
+            console.log('WebSocket connected successfully');
             
             // Send user profile to backend when connected
             if (currentUser.username) {
@@ -133,20 +151,31 @@ async function connectWebSocket() {
                     online: true
                 };
                 websocket.send(JSON.stringify(userData));
+                console.log('Sent user profile:', userData);
             }
         };
         
         websocket.onmessage = function(event) {
             try {
                 const data = JSON.parse(event.data);
+                console.log('Received WebSocket message:', data);
                 handleWebSocketMessage(data);
             } catch (e) {
                 console.log('Non-JSON message:', event.data);
             }
         };
         
-        websocket.onclose = function() {
+        websocket.onclose = function(event) {
             updateStatus('disconnected', 'Disconnected');
+            console.log('WebSocket closed:', event.code, event.reason);
+            
+            // Attempt to reconnect after 3 seconds
+            setTimeout(() => {
+                if (!websocket || websocket.readyState === WebSocket.CLOSED) {
+                    console.log('Attempting to reconnect...');
+                    connectWebSocket();
+                }
+            }, 3000);
         };
         
         websocket.onerror = function(error) {
@@ -172,14 +201,20 @@ function handleWebSocketMessage(data) {
     // Handle different types of messages based on data structure
     if (data.x !== undefined && data.y !== undefined && data.color) {
         // This is a pixel update
+        console.log('Handling pixel update:', data);
         ctx.fillStyle = data.color;
         ctx.fillRect(data.x * 5, data.y * 5, 5, 5);
-    } else if (data.id && data.username) {
-        // This is a user update
-        loadUsers();
+    } else if (data.id && data.username && !data.message) {
+        // This is a user update (has id, username, but no message)
+        console.log('Handling user update:', data);
+        loadUsers(); // Refresh the users list
     } else if (data.message && data.username) {
         // This is a chat message
-        addChatMessage(data.username, data.message, new Date(data.timestamp * 1000));
+        console.log('Handling chat message:', data);
+        const timestamp = data.timestamp ? new Date(data.timestamp * 1000) : new Date();
+        addChatMessage(data.username, data.message, timestamp);
+    } else {
+        console.log('Unknown message type:', data);
     }
 }
 
@@ -235,24 +270,33 @@ async function loadUsers() {
         const response = await fetch(`${baseURL}/api/getUsers`);
         
         if (!response.ok) {
-            // If backend returns error, just show empty users list
+            console.error('Failed to load users:', response.status);
+            const usersList = document.getElementById('usersList');
+            usersList.innerHTML = '<div class="user-item">Error loading users</div>';
+            return;
+        }
+        
+        const responseText = await response.text();
+        console.log('Users response:', responseText);
+        
+        if (!responseText || responseText.trim() === '') {
             const usersList = document.getElementById('usersList');
             usersList.innerHTML = '<div class="user-item">No users online</div>';
             return;
         }
         
-        const users = await response.json();
+        const users = JSON.parse(responseText);
         
         const usersList = document.getElementById('usersList');
         usersList.innerHTML = '';
         
-        if (users && users.length > 0) {
+        if (users && Array.isArray(users) && users.length > 0) {
             users.forEach(user => {
                 const userDiv = document.createElement('div');
                 userDiv.className = 'user-item';
                 userDiv.innerHTML = `
-                    <div class="user-color" style="background-color: ${user.color}"></div>
-                    <span class="user-name">${user.username}</span>
+                    <div class="user-color" style="background-color: ${user.color || '#999'}"></div>
+                    <span class="user-name">${user.username || 'Unknown'}</span>
                     <span class="user-status">${user.online ? 'Online' : 'Offline'}</span>
                 `;
                 usersList.appendChild(userDiv);
@@ -264,7 +308,7 @@ async function loadUsers() {
     } catch (error) {
         console.error('Error loading users:', error);
         const usersList = document.getElementById('usersList');
-        usersList.innerHTML = '<div class="user-item">No users online</div>';
+        usersList.innerHTML = '<div class="user-item">Error loading users</div>';
     }
 }
 
@@ -273,17 +317,26 @@ async function loadMessages() {
         const response = await fetch(`${baseURL}/api/getMessages`);
         
         if (!response.ok) {
-            return; // Just skip if messages endpoint fails
+            console.error('Failed to load messages:', response.status);
+            return;
         }
         
-        const messages = await response.json();
+        const responseText = await response.text();
+        console.log('Messages response:', responseText);
+        
+        if (!responseText || responseText.trim() === '') {
+            return;
+        }
+        
+        const messages = JSON.parse(responseText);
         
         const chatMessages = document.getElementById('chatMessages');
         chatMessages.innerHTML = '';
         
-        if (messages && messages.length > 0) {
+        if (messages && Array.isArray(messages) && messages.length > 0) {
             messages.forEach(message => {
-                addChatMessage(message.username, message.message, new Date(message.timestamp * 1000));
+                const timestamp = message.timestamp ? new Date(message.timestamp * 1000) : new Date();
+                addChatMessage(message.username, message.message, timestamp);
             });
         }
         
@@ -305,9 +358,14 @@ function sendMessage() {
         };
         
         websocket.send(JSON.stringify(chatMessage));
+        console.log('Sent chat message:', chatMessage);
         
-        addChatMessage(currentUser.username, message);
+        // Don't add the message locally - wait for it to come back via WebSocket
+        // This prevents duplicate messages
         chatInput.value = '';
+    } else if (!websocket || websocket.readyState !== WebSocket.OPEN) {
+        console.log('WebSocket not connected, cannot send message');
+        addChatMessage('System', 'Not connected to server. Please wait for connection.');
     }
 }
 
@@ -349,6 +407,9 @@ function updateUserProfile() {
                 online: true
             };
             websocket.send(JSON.stringify(userData));
+            console.log('Sent user update:', userData);
+        } else {
+            console.log('WebSocket not connected, cannot send user update');
         }
     }
 }
@@ -374,4 +435,11 @@ document.addEventListener('DOMContentLoaded', function() {
             updateColorPreview();
         });
     }
+    
+    // Periodically refresh users list every 10 seconds
+    setInterval(() => {
+        if (websocket && websocket.readyState === WebSocket.OPEN) {
+            loadUsers();
+        }
+    }, 10000);
 });
