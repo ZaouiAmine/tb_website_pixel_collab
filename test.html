@@ -355,7 +355,7 @@
         // Global variables
         let websocket = null;
         let realTimeInterval = null;
-        let baseURL = 'http://tv62dspc1.blackhole.localtau'; // Will be set based on your backend URL
+        let baseURL = window.location.origin; // Automatically use the current domain
         
         // Initialize the page
         document.addEventListener('DOMContentLoaded', function() {
