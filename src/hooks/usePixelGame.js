@@ -58,10 +58,10 @@ export const usePixelGame = () => {
         const pixelUrl = await pixelResponse.text()
         const chatUrl = await chatResponse.text()
         
-        // Construct WebSocket URLs using window.location.origin
-        const wsBaseUrl = `${window.location.origin}/api/ws`
-        setPixelChannelUrl(`${wsBaseUrl}${pixelUrl}`)
-        setChatChannelUrl(`${wsBaseUrl}${chatUrl}`)
+        // Construct WebSocket URLs using window.location.origin with /api/ prefix
+        const wsBaseUrl = window.location.origin.replace('http', 'ws')
+        setPixelChannelUrl(`${wsBaseUrl}/api/${pixelUrl}`)
+        setChatChannelUrl(`${wsBaseUrl}/api/${chatUrl}`)
       }
     } catch (error) {
       console.error('Error getting WebSocket URLs:', error)
