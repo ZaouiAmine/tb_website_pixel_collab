@@ -402,34 +402,42 @@
             }
             
             updateWebSocketStatus('connecting', 'Connecting...');
+            logResponse('realtimeResponse', 'Starting WebSocket connection process...');
             
             try {
                 // First get the WebSocket URL
+                logResponse('realtimeResponse', 'Step 1: Getting WebSocket URL from backend...');
                 await getWebSocketURL();
+                
                 const wsURL = document.getElementById('websocketResponse').textContent;
+                logResponse('realtimeResponse', 'Step 2: Raw WebSocket URL response: ' + wsURL);
+                
                 const urlMatch = wsURL.match(/"websocket_url":"([^"]+)"/);
                 
                 if (urlMatch) {
                     const wsPath = urlMatch[1];
+                    logResponse('realtimeResponse', 'Step 3: Extracted WebSocket path: ' + wsPath);
+                    
                     // Ensure proper WebSocket URL construction
                     let fullWsURL;
                     if (baseURL.startsWith('https://')) {
-                        fullWsURL = baseURL.replace('https://', 'wss://') + wsPath;
+                        fullWsURL = baseURL.replace('https://', 'wss://') + (wsPath.startsWith('/') ? '' : '/') + wsPath;
                     } else {
-                        fullWsURL = baseURL.replace('http://', 'ws://') + wsPath;
+                        fullWsURL = baseURL.replace('http://', 'ws://') + (wsPath.startsWith('/') ? '' : '/') + wsPath;
                     }
                     
-                    logResponse('realtimeResponse', 'Attempting to connect to: ' + fullWsURL);
+                    logResponse('realtimeResponse', 'Step 4: Full WebSocket URL: ' + fullWsURL);
+                    logResponse('realtimeResponse', 'Step 5: Attempting WebSocket connection...');
                     
                     websocket = new WebSocket(fullWsURL);
                     
                     websocket.onopen = function() {
                         updateWebSocketStatus('connected', 'Connected');
-                        logResponse('realtimeResponse', 'WebSocket connected successfully');
+                        logResponse('realtimeResponse', '✅ WebSocket connected successfully!');
                     };
                     
                     websocket.onmessage = function(event) {
-                        logResponse('realtimeResponse', 'Received: ' + event.data);
+                        logResponse('realtimeResponse', '📨 Received message: ' + event.data);
                         // Parse and handle different message types
                         try {
                             const data = JSON.parse(event.data);
@@ -442,25 +450,30 @@
                             }
                         } catch (e) {
                             // Handle non-JSON messages
+                            logResponse('realtimeResponse', '📨 Non-JSON message received');
                         }
                     };
                     
-                    websocket.onclose = function() {
+                    websocket.onclose = function(event) {
                         updateWebSocketStatus('disconnected', 'Disconnected');
-                        logResponse('realtimeResponse', 'WebSocket disconnected');
+                        logResponse('realtimeResponse', '❌ WebSocket disconnected. Code: ' + event.code + ', Reason: ' + event.reason);
                     };
                     
                     websocket.onerror = function(error) {
                         updateWebSocketStatus('disconnected', 'Error');
-                        logResponse('realtimeResponse', 'WebSocket error: ' + error);
+                        logResponse('realtimeResponse', '❌ WebSocket error occurred');
+                        logResponse('realtimeResponse', 'Error details: ' + JSON.stringify(error));
                     };
                 } else {
-                    updateWebSocketStatus('disconnected', 'Failed to get WebSocket URL');
-                    logResponse('realtimeResponse', 'Failed to parse WebSocket URL from response: ' + wsURL);
+                    updateWebSocketStatus('disconnected', 'Failed to parse WebSocket URL');
+                    logResponse('realtimeResponse', '❌ Failed to parse WebSocket URL from response');
+                    logResponse('realtimeResponse', 'Expected JSON format: {"websocket_url": "..."}');
+                    logResponse('realtimeResponse', 'Actual response: ' + wsURL);
                 }
             } catch (error) {
                 updateWebSocketStatus('disconnected', 'Error');
-                logResponse('realtimeResponse', 'Error getting WebSocket URL: ' + error.message);
+                logResponse('realtimeResponse', '❌ Error in WebSocket connection process: ' + error.message);
+                logResponse('realtimeResponse', 'Full error: ' + JSON.stringify(error));
             }
         }
         
