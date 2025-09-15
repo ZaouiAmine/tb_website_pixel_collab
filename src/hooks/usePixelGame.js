@@ -54,28 +54,39 @@ export const usePixelGame = () => {
     }
   }, [])
 
-  // Get WebSocket URL
-  const getWebSocketUrl = useCallback(async () => {
+  // Get WebSocket URLs
+  const getWebSocketUrls = useCallback(async () => {
     try {
-      const response = await fetch(`${API_BASE}/ws?room=${ROOM}`)
-      
-      if (response.ok) {
-        const wsPath = await response.text()
-        console.log('Raw WebSocket path from backend:', wsPath)
+      const [pixelResponse, chatResponse] = await Promise.all([
+        fetch(`${API_BASE}/getPixelChannelURL?room=${ROOM}`),
+        fetch(`${API_BASE}/getChatChannelURL?room=${ROOM}`)
+      ])
+
+      if (pixelResponse.ok && chatResponse.ok) {
+        const pixelUrl = await pixelResponse.text()
+        const chatUrl = await chatResponse.text()
         
-        // Construct WebSocket URL using window.location.origin
+        console.log('Raw pixel URL from backend:', pixelUrl)
+        console.log('Raw chat URL from backend:', chatUrl)
+        
+        // Construct WebSocket URLs using window.location.origin
         const wsBaseUrl = window.location.origin.replace('http', 'ws')
-        const finalWsUrl = `${wsBaseUrl}/${wsPath}`
+        const finalPixelUrl = `${wsBaseUrl}/${pixelUrl}`
+        const finalChatUrl = `${wsBaseUrl}/${chatUrl}`
         
-        console.log('Final WebSocket URL:', finalWsUrl)
+        console.log('Final pixel WebSocket URL:', finalPixelUrl)
+        console.log('Final chat WebSocket URL:', finalChatUrl)
         
-        setPixelChannelUrl(finalWsUrl)
-        setChatChannelUrl(finalWsUrl)
+        setPixelChannelUrl(finalPixelUrl)
+        setChatChannelUrl(finalChatUrl)
       } else {
-        console.error('Failed to get WebSocket URL:', response.status)
+        console.error('Failed to get WebSocket URLs:', {
+          pixelStatus: pixelResponse.status,
+          chatStatus: chatResponse.status
+        })
       }
     } catch (error) {
-      console.error('Error getting WebSocket URL:', error)
+      console.error('Error getting WebSocket URLs:', error)
     }
   }, [])
 
@@ -86,12 +97,12 @@ export const usePixelGame = () => {
       await Promise.all([
         loadCanvas(),
         loadMessages(),
-        getWebSocketUrl()
+        getWebSocketUrls()
       ])
       setIsLoading(false)
     }
     initialize()
-  }, [loadCanvas, loadMessages, getWebSocketUrl])
+  }, [loadCanvas, loadMessages, getWebSocketUrls])
 
   // Handle pixel updates from WebSocket
   const handlePixelUpdate = useCallback((data) => {
@@ -112,22 +123,9 @@ export const usePixelGame = () => {
     setMessages(prev => [...prev, data])
   }, [])
 
-  // Handle all WebSocket messages
-  const handleWebSocketMessage = useCallback((data) => {
-    console.log('Received WebSocket message:', data)
-    
-    // Check if it's a pixel update (has x, y, color)
-    if (data.x !== undefined && data.y !== undefined && data.color !== undefined) {
-      handlePixelUpdate(data)
-    }
-    // Check if it's a chat message (has message field)
-    else if (data.message !== undefined) {
-      handleChatMessage(data)
-    }
-  }, [handlePixelUpdate, handleChatMessage])
-
-  // Single WebSocket connection
-  const { sendMessage: sendWebSocketMessage } = useWebSocket(pixelChannelUrl, handleWebSocketMessage)
+  // WebSocket connections
+  const { sendMessage: sendPixelUpdate } = useWebSocket(pixelChannelUrl, handlePixelUpdate)
+  const { sendMessage: sendChatMessage } = useWebSocket(chatChannelUrl, handleChatMessage)
 
   // Place a pixel
   const placePixel = useCallback((x, y, color, userId = 'user1', username = 'User') => {
@@ -152,8 +150,8 @@ export const usePixelGame = () => {
     })
     
     // Send pixel directly via WebSocket
-    sendWebSocketMessage(pixelData)
-  }, [sendWebSocketMessage])
+    sendPixelUpdate(pixelData)
+  }, [sendPixelUpdate])
 
   // Send a chat message
   const sendMessage = useCallback((message, userId = 'user1', username = 'User') => {
@@ -177,8 +175,8 @@ export const usePixelGame = () => {
     setMessages(prev => [...prev, chatMessage])
     
     // Send message directly via WebSocket
-    sendWebSocketMessage(messageData)
-  }, [sendWebSocketMessage])
+    sendChatMessage(messageData)
+  }, [sendChatMessage])
 
   return {
     pixels,
