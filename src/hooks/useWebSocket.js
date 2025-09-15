@@ -19,10 +19,18 @@ export const useWebSocket = (url, onMessage) => {
           console.log('WebSocket connected successfully:', url)
         }
 
-        wsRef.current.onmessage = (event) => {
+        wsRef.current.onmessage = async (event) => {
           try {
             console.log('Raw WebSocket message received:', event.data)
-            const data = JSON.parse(event.data)
+            
+            // Handle Blob data by converting to text
+            let messageData = event.data
+            if (event.data instanceof Blob) {
+              messageData = await event.data.text()
+              console.log('Converted Blob to text:', messageData)
+            }
+            
+            const data = JSON.parse(messageData)
             onMessage(data)
           } catch (err) {
             console.error('Error parsing WebSocket message:', err)
