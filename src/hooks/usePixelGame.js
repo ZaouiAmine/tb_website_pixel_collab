@@ -1,8 +1,9 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useWebSocket } from './useWebSocket'
 
 const API_BASE = `${window.location.origin}/api` // Use same origin as frontend
 const ROOM = 'main' // Default room
+const BATCH_INTERVAL = 2000 // 2 seconds in milliseconds
 
 export const usePixelGame = () => {
   const [pixels, setPixels] = useState({})
@@ -10,6 +11,10 @@ export const usePixelGame = () => {
   const [pixelChannelUrl, setPixelChannelUrl] = useState(null)
   const [chatChannelUrl, setChatChannelUrl] = useState(null)
   const [isLoading, setIsLoading] = useState(true)
+  
+  // Pixel batching
+  const pixelBatch = useRef([])
+  const batchTimeoutRef = useRef(null)
 
   // Load initial canvas data
   const loadCanvas = useCallback(async () => {
@@ -104,18 +109,31 @@ export const usePixelGame = () => {
     initialize()
   }, [loadCanvas, loadMessages, getWebSocketUrls])
 
-  // Handle pixel updates from WebSocket
-  const handlePixelUpdate = useCallback((data) => {
-    console.log('Received pixel update:', data)
-    const { x, y, color } = data
-    setPixels(prev => {
-      const newPixels = {
-        ...prev,
-        [`${x},${y}`]: color
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (batchTimeoutRef.current) {
+        clearTimeout(batchTimeoutRef.current)
       }
-      console.log('Updated pixels:', newPixels)
-      return newPixels
-    })
+    }
+  }, [])
+
+  // Handle pixel batch updates from WebSocket
+  const handlePixelBatchUpdate = useCallback((data) => {
+    console.log('Received pixel batch update:', data)
+    const { pixels: batchPixels } = data
+    
+    if (Array.isArray(batchPixels)) {
+      setPixels(prev => {
+        const newPixels = { ...prev }
+        batchPixels.forEach(pixel => {
+          const { x, y, color } = pixel
+          newPixels[`${x},${y}`] = color
+        })
+        console.log('Updated pixels from batch:', newPixels)
+        return newPixels
+      })
+    }
   }, [])
 
   // Handle chat messages from WebSocket
@@ -123,8 +141,32 @@ export const usePixelGame = () => {
     setMessages(prev => [...prev, data])
   }, [])
 
+  // Send pixel batch
+  const sendPixelBatch = useCallback(() => {
+    if (pixelBatch.current.length > 0 && sendPixelUpdate) {
+      const batchData = {
+        pixels: [...pixelBatch.current],
+        room: ROOM,
+        timestamp: Date.now()
+      }
+      console.log('Sending pixel batch:', batchData)
+      sendPixelUpdate(batchData)
+      pixelBatch.current = [] // Clear the batch
+    }
+  }, [sendPixelUpdate])
+
+  // Schedule batch sending
+  const scheduleBatchSend = useCallback(() => {
+    if (batchTimeoutRef.current) {
+      clearTimeout(batchTimeoutRef.current)
+    }
+    batchTimeoutRef.current = setTimeout(() => {
+      sendPixelBatch()
+    }, BATCH_INTERVAL)
+  }, [sendPixelBatch])
+
   // WebSocket connections
-  const { sendMessage: sendPixelUpdate } = useWebSocket(pixelChannelUrl, handlePixelUpdate)
+  const { sendMessage: sendPixelUpdate } = useWebSocket(pixelChannelUrl, handlePixelBatchUpdate)
   const { sendMessage: sendChatMessage } = useWebSocket(chatChannelUrl, handleChatMessage)
 
   // Place a pixel
@@ -149,9 +191,13 @@ export const usePixelGame = () => {
       return newPixels
     })
     
-    // Send pixel directly via WebSocket
-    sendPixelUpdate(pixelData)
-  }, [sendPixelUpdate])
+    // Add pixel to batch instead of sending immediately
+    pixelBatch.current.push(pixelData)
+    console.log('Added pixel to batch. Batch size:', pixelBatch.current.length)
+    
+    // Schedule batch send (this will reset the timer if called multiple times)
+    scheduleBatchSend()
+  }, [scheduleBatchSend])
 
   // Send a chat message
   const sendMessage = useCallback((message, userId = 'user1', username = 'User') => {
