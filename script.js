@@ -51,24 +51,31 @@ function draw(e) {
     const x = Math.floor((e.clientX - rect.left) * scaleX);
     const y = Math.floor((e.clientY - rect.top) * scaleY);
     
-    // Draw pixel
-    ctx.fillStyle = currentUser.color;
-    ctx.fillRect(x, y, 1, 1);
+    // Scale down coordinates to match backend (100x100 grid)
+    const backendX = Math.floor(x / 5); // 500px canvas / 100 backend pixels = 5px per pixel
+    const backendY = Math.floor(y / 5);
     
-    // Send pixel update via WebSocket
-    if (websocket && websocket.readyState === WebSocket.OPEN) {
-        const pixel = {
-            x: x,
-            y: y,
-            color: currentUser.color,
-            userId: currentUser.id,
-            username: currentUser.username
-        };
+    // Ensure coordinates are within bounds
+    if (backendX >= 0 && backendX < 100 && backendY >= 0 && backendY < 100) {
+        // Draw pixel (5x5 for visibility)
+        ctx.fillStyle = currentUser.color;
+        ctx.fillRect(backendX * 5, backendY * 5, 5, 5);
         
-        websocket.send(JSON.stringify({
-            type: 'pixel',
-            data: pixel
-        }));
+        // Send pixel update via WebSocket
+        if (websocket && websocket.readyState === WebSocket.OPEN) {
+            const pixel = {
+                x: backendX,
+                y: backendY,
+                color: currentUser.color,
+                userId: currentUser.id,
+                username: currentUser.username
+            };
+            
+            websocket.send(JSON.stringify({
+                type: 'pixel',
+                data: pixel
+            }));
+        }
     }
 }
 
@@ -109,11 +116,27 @@ async function connectWebSocket() {
             updateStatus('connected', 'Connected');
             loadUsers();
             loadMessages();
+            
+            // Send user profile to backend when connected
+            if (currentUser.username) {
+                websocket.send(JSON.stringify({
+                    type: 'user',
+                    data: {
+                        id: currentUser.id,
+                        username: currentUser.username,
+                        color: currentUser.color,
+                        online: true
+                    }
+                }));
+            }
         };
         
         websocket.onmessage = function(event) {
+            console.log('WebSocket message received:', event.data);
+            
             if (event.data instanceof Blob) {
                 event.data.text().then(text => {
+                    console.log('Blob content:', text);
                     try {
                         const message = JSON.parse(text);
                         handleWebSocketMessage(message);
@@ -124,6 +147,7 @@ async function connectWebSocket() {
             } else {
                 try {
                     const message = JSON.parse(event.data);
+                    console.log('Parsed message:', message);
                     handleWebSocketMessage(message);
                 } catch (e) {
                     console.log('Non-JSON text message:', event.data);
@@ -159,11 +183,13 @@ function handleWebSocketMessage(message) {
         // Update canvas with received pixel
         const pixel = message.data;
         ctx.fillStyle = pixel.color;
-        ctx.fillRect(pixel.x, pixel.y, 1, 1);
+        ctx.fillRect(pixel.x * 5, pixel.y * 5, 5, 5); // Scale up for visibility
     } else if (message.type === 'user') {
         loadUsers();
     } else if (message.type === 'message') {
-        loadMessages();
+        // Handle incoming chat message
+        const chatMessage = message.data;
+        addChatMessage(chatMessage.username, chatMessage.message, new Date(chatMessage.timestamp * 1000));
     }
 }
 
@@ -259,6 +285,12 @@ function sendMessage() {
             data: chatMessage
         }));
         
+        // Add message to chat immediately for better UX
+        addChatMessage(currentUser.username, message);
+        chatInput.value = '';
+    } else if (message) {
+        // Fallback: add message locally if WebSocket not connected
+        addChatMessage(currentUser.username, message + ' (offline)');
         chatInput.value = '';
     }
 }
