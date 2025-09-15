@@ -1,7 +1,6 @@
 version: 1.00
 environment:
-  image: node:20-alpine
+  image: node:18.14.1-bullseye
   variables:
-    NODE_ENV: production
 workflow:
   - build
