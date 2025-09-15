@@ -8,7 +8,7 @@ let currentUser = {
     username: 'Player',
     color: '#ff0000'
 };
-let baseURL = window.location.origin;
+let baseURL = 'https://tv62dspc1.g.k8s.cyou';
 
 // Initialize the application
 document.addEventListener('DOMContentLoaded', function() {
@@ -132,11 +132,8 @@ async function connectWebSocket() {
         };
         
         websocket.onmessage = function(event) {
-            console.log('WebSocket message received:', event.data);
-            
             if (event.data instanceof Blob) {
                 event.data.text().then(text => {
-                    console.log('Blob content:', text);
                     try {
                         const message = JSON.parse(text);
                         handleWebSocketMessage(message);
@@ -147,7 +144,6 @@ async function connectWebSocket() {
             } else {
                 try {
                     const message = JSON.parse(event.data);
-                    console.log('Parsed message:', message);
                     handleWebSocketMessage(message);
                 } catch (e) {
                     console.log('Non-JSON text message:', event.data);
@@ -180,14 +176,12 @@ function disconnectWebSocket() {
 
 function handleWebSocketMessage(message) {
     if (message.type === 'pixel') {
-        // Update canvas with received pixel
         const pixel = message.data;
         ctx.fillStyle = pixel.color;
-        ctx.fillRect(pixel.x * 5, pixel.y * 5, 5, 5); // Scale up for visibility
+        ctx.fillRect(pixel.x * 5, pixel.y * 5, 5, 5);
     } else if (message.type === 'user') {
         loadUsers();
     } else if (message.type === 'message') {
-        // Handle incoming chat message
         const chatMessage = message.data;
         addChatMessage(chatMessage.username, chatMessage.message, new Date(chatMessage.timestamp * 1000));
     }
@@ -207,7 +201,7 @@ async function loadCanvas() {
             row.forEach((pixel, x) => {
                 if (pixel.color && pixel.color !== '#ffffff') {
                     ctx.fillStyle = pixel.color;
-                    ctx.fillRect(x * 5, y * 5, 5, 5); // Scale up for visibility
+                    ctx.fillRect(x * 5, y * 5, 5, 5);
                 }
             });
         });
@@ -221,10 +215,13 @@ async function clearCanvas() {
     try {
         await fetch(`${baseURL}/api/resetCanvas`);
         ctx.clearRect(0, 0, canvas.width, canvas.height);
-        addChatMessage('System', 'Canvas has been cleared!');
     } catch (error) {
         console.error('Error clearing canvas:', error);
     }
+}
+
+function refreshCanvas() {
+    loadCanvas();
 }
 
 async function loadUsers() {
@@ -285,12 +282,7 @@ function sendMessage() {
             data: chatMessage
         }));
         
-        // Add message to chat immediately for better UX
         addChatMessage(currentUser.username, message);
-        chatInput.value = '';
-    } else if (message) {
-        // Fallback: add message locally if WebSocket not connected
-        addChatMessage(currentUser.username, message + ' (offline)');
         chatInput.value = '';
     }
 }
