@@ -14,9 +14,14 @@ export const usePixelGame = () => {
   // Load initial canvas data
   const loadCanvas = useCallback(async () => {
     try {
+      console.log('Loading canvas data for room:', ROOM)
       const response = await fetch(`${API_BASE}/getCanvas?room=${ROOM}`)
+      console.log('Canvas response status:', response.status)
+      
       if (response.ok) {
         const canvasData = await response.json()
+        console.log('Canvas data received:', canvasData)
+        
         // Convert 2D array to pixels object
         const pixelsObj = {}
         canvasData.forEach((row, y) => {
@@ -26,7 +31,10 @@ export const usePixelGame = () => {
             }
           })
         })
+        console.log('Converted pixels object:', pixelsObj)
         setPixels(pixelsObj)
+      } else {
+        console.error('Failed to load canvas, status:', response.status)
       }
     } catch (error) {
       console.error('Error loading canvas:', error)
@@ -98,11 +106,16 @@ export const usePixelGame = () => {
 
   // Handle pixel updates from WebSocket
   const handlePixelUpdate = useCallback((data) => {
+    console.log('Received pixel update:', data)
     const { x, y, color } = data
-    setPixels(prev => ({
-      ...prev,
-      [`${x},${y}`]: color
-    }))
+    setPixels(prev => {
+      const newPixels = {
+        ...prev,
+        [`${x},${y}`]: color
+      }
+      console.log('Updated pixels:', newPixels)
+      return newPixels
+    })
   }, [])
 
   // Handle chat messages from WebSocket
@@ -124,6 +137,7 @@ export const usePixelGame = () => {
       username,
       room: ROOM
     }
+    console.log('Placing pixel:', pixelData)
     sendPixelUpdate(pixelData)
   }, [sendPixelUpdate])
 
