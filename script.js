@@ -107,9 +107,7 @@ async function connectWebSocket() {
     try {
         // Get WebSocket URL from backend
         const response = await fetch(`${baseURL}/api/getWebSocketURL?room=pixelupdates`);
-        const data = await response.json();
-        
-        const wsPath = data.websocket_url;
+        const wsPath = await response.text();
         let wsURL;
         if (baseURL.startsWith('https://')) {
             wsURL = baseURL.replace('https://', 'wss://') + '/' + wsPath;
@@ -221,7 +219,7 @@ async function loadCanvas() {
 
 async function clearCanvas() {
     try {
-        await fetch(`${baseURL}/api/resetCanvas`);
+        await fetch(`${baseURL}/api/initCanvas`);
         ctx.clearRect(0, 0, canvas.width, canvas.height);
     } catch (error) {
         console.error('Error clearing canvas:', error);
