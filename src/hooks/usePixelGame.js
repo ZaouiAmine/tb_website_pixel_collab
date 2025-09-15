@@ -59,7 +59,7 @@ export const usePixelGame = () => {
         const chatUrl = await chatResponse.text()
         
         // Convert relative URLs to full WebSocket URLs
-        const baseUrl = API_BASE.replace('http', 'ws')
+        const baseUrl = API_BASE.replace('/api', '/api/ws').replace('http', 'ws')
         setPixelChannelUrl(`${baseUrl}${pixelUrl}`)
         setChatChannelUrl(`${baseUrl}${chatUrl}`)
       }
