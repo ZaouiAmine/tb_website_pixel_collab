@@ -1,69 +1,12 @@
-# Pixel Collab Game - Frontend
+# React + Vite
 
-A simple collaborative pixel drawing application built with React, Tailwind CSS, and Zustand.
+This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 
-## Features
+Currently, two official plugins are available:
 
-- 🎨 32x32 pixel canvas for drawing
-- 🖌️ Color palette with 15 predefined colors
-- 🖱️ Click and drag to draw pixels
-- 🧹 Clear canvas functionality
-- 📱 Responsive design
-- 🔄 State management with Zustand
-- 🎯 Ready for backend integration with Taubyte
+- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) for Fast Refresh
+- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
 
-## Tech Stack
+## Expanding the ESLint configuration
 
-- **React** - UI framework
-- **Vite** - Build tool and dev server
-- **Tailwind CSS** - Styling
-- **Zustand** - State management
-- **JavaScript** - Programming language
-
-## Getting Started
-
-1. Install dependencies:
-   ```bash
-   npm install
-   ```
-
-2. Start the development server:
-   ```bash
-   npm run dev
-   ```
-
-3. Open your browser and navigate to the local development URL (usually `http://localhost:5173`)
-
-## How to Use
-
-1. Select a color from the color palette
-2. Click and drag on the canvas to draw pixels
-3. Use the "Clear Canvas" button to start over
-4. Each pixel can be colored independently
-
-## Project Structure
-
-```
-src/
-├── components/
-│   ├── PixelCanvas.jsx    # Main drawing canvas component
-│   └── ColorPalette.jsx   # Color selection component
-├── store/
-│   └── canvasStore.js     # Zustand store for state management
-├── App.jsx                # Main application component
-├── main.jsx              # Application entry point
-└── index.css             # Global styles with Tailwind
-```
-
-## Future Enhancements
-
-This frontend is designed to be easily integrated with a backend built with Taubyte. The store includes methods for:
-- Loading pixel data from the server
-- Sending pixel updates to the server
-- Real-time collaboration features
-
-## Development
-
-- Run `npm run dev` for development
-- Run `npm run build` to build for production
-- Run `npm run preview` to preview the production build
+If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
