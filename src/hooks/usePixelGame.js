@@ -14,7 +14,7 @@ export const usePixelGame = () => {
   // Load initial canvas data
   const loadCanvas = useCallback(async () => {
     try {
-      const response = await fetch(`${API_BASE}/canvas?room=${ROOM}`)
+      const response = await fetch(`${API_BASE}/getCanvas?room=${ROOM}`)
       if (response.ok) {
         const canvasData = await response.json()
         // Convert 2D array to pixels object
@@ -36,7 +36,7 @@ export const usePixelGame = () => {
   // Load initial chat messages
   const loadMessages = useCallback(async () => {
     try {
-      const response = await fetch(`${API_BASE}/messages?room=${ROOM}`)
+      const response = await fetch(`${API_BASE}/getMessages?room=${ROOM}`)
       if (response.ok) {
         const messagesData = await response.json()
         setMessages(messagesData)
@@ -50,8 +50,8 @@ export const usePixelGame = () => {
   const getWebSocketUrls = useCallback(async () => {
     try {
       const [pixelResponse, chatResponse] = await Promise.all([
-        fetch(`${API_BASE}/pixelchannel?room=${ROOM}`),
-        fetch(`${API_BASE}/chatchannel?room=${ROOM}`)
+        fetch(`${API_BASE}/getPixelChannelURL?room=${ROOM}`),
+        fetch(`${API_BASE}/getChatChannelURL?room=${ROOM}`)
       ])
 
       if (pixelResponse.ok && chatResponse.ok) {
