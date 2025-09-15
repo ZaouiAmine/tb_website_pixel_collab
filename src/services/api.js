@@ -47,7 +47,20 @@ class ApiService {
 
   // WebSocket operations
   async getWebSocketURL() {
-    return this.request(API_CONFIG.ENDPOINTS.GET_WEBSOCKET_URL);
+    const url = getApiUrl(API_CONFIG.ENDPOINTS.GET_WEBSOCKET_URL);
+    
+    try {
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      
+      // Return the WebSocket path as a string
+      return await response.text();
+    } catch (error) {
+      console.error(`API Error (${API_CONFIG.ENDPOINTS.GET_WEBSOCKET_URL}):`, error);
+      throw error;
+    }
   }
 
   // User management

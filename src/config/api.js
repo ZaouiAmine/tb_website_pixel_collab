@@ -10,7 +10,7 @@ export const API_CONFIG = {
     GET_CANVAS: '/api/getCanvas',
     PLACE_PIXEL: '/api/placePixel',
     INIT_CANVAS: '/api/initCanvas',
-    GET_WEBSOCKET_URL: '/api/getWebSocketURL',
+    GET_WEBSOCKET_URL: '/api/ws?room=pixelupdates',
     GET_USERS: '/api/getUsers',
     JOIN_GAME: '/api/joinGame',
     LEAVE_GAME: '/api/leaveGame',

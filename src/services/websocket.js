@@ -18,8 +18,13 @@ class WebSocketService {
   async connect() {
     try {
       // Get WebSocket URL from backend
-      const response = await apiService.getWebSocketURL();
-      const wsUrl = response.url;
+      const wsPath = await apiService.getWebSocketURL();
+      
+      // Construct full WebSocket URL
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsUrl = `${protocol}//${window.location.host}/${wsPath}`;
+      
+      console.log('Connecting to WebSocket:', wsUrl);
       
       // Create WebSocket connection
       this.ws = new WebSocket(wsUrl);
