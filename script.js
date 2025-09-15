@@ -44,7 +44,18 @@ async function loadInitialState() {
 // Canvas initialization
 function initializeCanvas() {
     canvas = document.getElementById('pixelCanvas');
+    if (!canvas) {
+        console.error('Canvas element not found');
+        return;
+    }
+    
     ctx = canvas.getContext('2d');
+    if (!ctx) {
+        console.error('Could not get canvas context');
+        return;
+    }
+    
+    console.log('Canvas initialized successfully:', canvas.width, 'x', canvas.height);
     
     // Set up canvas event listeners
     canvas.addEventListener('mousedown', startDrawing);
@@ -202,17 +213,38 @@ function handleWebSocketMessage(data) {
     if (data.x !== undefined && data.y !== undefined && data.color) {
         // This is a pixel update
         console.log('Handling pixel update:', data);
+        
+        // Ensure canvas context is available
+        if (!ctx) {
+            console.error('Canvas context not available for pixel update');
+            return;
+        }
+        
+        // Draw the pixel
         ctx.fillStyle = data.color;
         ctx.fillRect(data.x * 5, data.y * 5, 5, 5);
+        console.log(`Drew pixel at (${data.x}, ${data.y}) with color ${data.color}`);
+        
     } else if (data.id && data.username && !data.message) {
         // This is a user update (has id, username, but no message)
         console.log('Handling user update:', data);
         loadUsers(); // Refresh the users list
+        
     } else if (data.message && data.username) {
         // This is a chat message
         console.log('Handling chat message:', data);
         const timestamp = data.timestamp ? new Date(data.timestamp * 1000) : new Date();
+        
+        // Ensure chat container exists
+        const chatMessages = document.getElementById('chatMessages');
+        if (!chatMessages) {
+            console.error('Chat messages container not found');
+            return;
+        }
+        
         addChatMessage(data.username, data.message, timestamp);
+        console.log(`Added chat message from ${data.username}: ${data.message}`);
+        
     } else {
         console.log('Unknown message type:', data);
     }
@@ -376,7 +408,14 @@ function handleChatKeyPress(event) {
 }
 
 function addChatMessage(username, message, timestamp = new Date()) {
+    console.log(`addChatMessage called: ${username} - ${message}`);
+    
     const chatMessages = document.getElementById('chatMessages');
+    if (!chatMessages) {
+        console.error('Chat messages container not found in addChatMessage');
+        return;
+    }
+    
     const messageDiv = document.createElement('div');
     messageDiv.className = 'message';
     messageDiv.innerHTML = `
@@ -384,8 +423,11 @@ function addChatMessage(username, message, timestamp = new Date()) {
         <div class="message-content">${message}</div>
         <div class="message-time">${timestamp.toLocaleTimeString()}</div>
     `;
+    
     chatMessages.appendChild(messageDiv);
     chatMessages.scrollTop = chatMessages.scrollHeight;
+    
+    console.log(`Chat message added to DOM: ${username} - ${message}`);
 }
 
 // User management
@@ -443,3 +485,45 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }, 10000);
 });
+
+// Test functions for debugging (available in browser console)
+window.testChat = function(message) {
+    console.log('Testing chat with message:', message);
+    addChatMessage('TestUser', message || 'Test message');
+};
+
+window.testPixel = function(x, y, color) {
+    console.log('Testing pixel at:', x, y, color);
+    if (ctx) {
+        ctx.fillStyle = color || '#ff0000';
+        ctx.fillRect((x || 10) * 5, (y || 10) * 5, 5, 5);
+        console.log('Pixel drawn');
+    } else {
+        console.error('Canvas context not available');
+    }
+};
+
+window.testWebSocket = function() {
+    console.log('WebSocket status:', websocket ? websocket.readyState : 'null');
+    if (websocket && websocket.readyState === WebSocket.OPEN) {
+        console.log('Sending test message...');
+        websocket.send(JSON.stringify({
+            userId: 'test',
+            username: 'TestUser',
+            message: 'Test message from console',
+            timestamp: Math.floor(Date.now() / 1000)
+        }));
+    } else {
+        console.log('WebSocket not connected');
+    }
+};
+
+window.checkStatus = function() {
+    console.log('=== STATUS CHECK ===');
+    console.log('WebSocket:', websocket ? websocket.readyState : 'null');
+    console.log('Canvas:', canvas ? `${canvas.width}x${canvas.height}` : 'null');
+    console.log('Context:', ctx ? 'available' : 'null');
+    console.log('Chat container:', document.getElementById('chatMessages') ? 'found' : 'not found');
+    console.log('Current user:', currentUser);
+    console.log('==================');
+};
