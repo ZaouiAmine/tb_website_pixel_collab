@@ -14,8 +14,13 @@ let baseURL = window.location.origin;
 document.addEventListener('DOMContentLoaded', function() {
     initializeCanvas();
     updateColorPreview();
-    loadCanvas();
-    connectWebSocket();
+    
+    // Load canvas first, then connect WebSocket
+    setTimeout(() => {
+        loadCanvas();
+        connectWebSocket();
+        addChatMessage('System', 'Welcome to the pixel collaboration game!');
+    }, 100);
 });
 
 // Canvas initialization
@@ -108,12 +113,19 @@ async function connectWebSocket() {
         const data = await response.json();
         
         const wsPath = data.websocket_url;
-        const wsURL = baseURL.replace('https://', 'wss://') + '/' + wsPath;
+        let wsURL;
+        if (baseURL.startsWith('https://')) {
+            wsURL = baseURL.replace('https://', 'wss://') + '/' + wsPath;
+        } else {
+            wsURL = baseURL.replace('http://', 'ws://') + '/' + wsPath;
+        }
         
         websocket = new WebSocket(wsURL);
         
         websocket.onopen = function() {
             updateStatus('connected', 'Connected');
+            
+            // Load fresh data when connected
             loadUsers();
             loadMessages();
             
@@ -191,20 +203,30 @@ function handleWebSocketMessage(message) {
 async function loadCanvas() {
     try {
         const response = await fetch(`${baseURL}/api/getCanvas`);
+        
+        if (!response.ok) {
+            console.error('Failed to load canvas:', response.status);
+            return;
+        }
+        
         const canvasData = await response.json();
         
         // Clear canvas
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         
         // Draw canvas data
-        canvasData.forEach((row, y) => {
-            row.forEach((pixel, x) => {
-                if (pixel.color && pixel.color !== '#ffffff') {
-                    ctx.fillStyle = pixel.color;
-                    ctx.fillRect(x * 5, y * 5, 5, 5);
+        if (canvasData && Array.isArray(canvasData)) {
+            canvasData.forEach((row, y) => {
+                if (Array.isArray(row)) {
+                    row.forEach((pixel, x) => {
+                        if (pixel && pixel.color && pixel.color !== '#ffffff') {
+                            ctx.fillStyle = pixel.color;
+                            ctx.fillRect(x * 5, y * 5, 5, 5);
+                        }
+                    });
                 }
             });
-        });
+        }
         
     } catch (error) {
         console.error('Error loading canvas:', error);
@@ -227,38 +249,59 @@ function refreshCanvas() {
 async function loadUsers() {
     try {
         const response = await fetch(`${baseURL}/api/getUsers`);
+        
+        if (!response.ok) {
+            // If backend returns error, just show empty users list
+            const usersList = document.getElementById('usersList');
+            usersList.innerHTML = '<div class="user-item">No users online</div>';
+            return;
+        }
+        
         const users = await response.json();
         
         const usersList = document.getElementById('usersList');
         usersList.innerHTML = '';
         
-        users.forEach(user => {
-            const userDiv = document.createElement('div');
-            userDiv.className = 'user-item';
-            userDiv.innerHTML = `
-                <div class="user-color" style="background-color: ${user.color}"></div>
-                <span class="user-name">${user.username}</span>
-                <span class="user-status">${user.online ? 'Online' : 'Offline'}</span>
-            `;
-            usersList.appendChild(userDiv);
-        });
+        if (users && users.length > 0) {
+            users.forEach(user => {
+                const userDiv = document.createElement('div');
+                userDiv.className = 'user-item';
+                userDiv.innerHTML = `
+                    <div class="user-color" style="background-color: ${user.color}"></div>
+                    <span class="user-name">${user.username}</span>
+                    <span class="user-status">${user.online ? 'Online' : 'Offline'}</span>
+                `;
+                usersList.appendChild(userDiv);
+            });
+        } else {
+            usersList.innerHTML = '<div class="user-item">No users online</div>';
+        }
         
     } catch (error) {
         console.error('Error loading users:', error);
+        const usersList = document.getElementById('usersList');
+        usersList.innerHTML = '<div class="user-item">No users online</div>';
     }
 }
 
 async function loadMessages() {
     try {
         const response = await fetch(`${baseURL}/api/getMessages`);
+        
+        if (!response.ok) {
+            return; // Just skip if messages endpoint fails
+        }
+        
         const messages = await response.json();
         
         const chatMessages = document.getElementById('chatMessages');
         chatMessages.innerHTML = '';
         
-        messages.forEach(message => {
-            addChatMessage(message.username, message.message, new Date(message.timestamp * 1000));
-        });
+        if (messages && messages.length > 0) {
+            messages.forEach(message => {
+                addChatMessage(message.username, message.message, new Date(message.timestamp * 1000));
+            });
+        }
         
     } catch (error) {
         console.error('Error loading messages:', error);
@@ -328,8 +371,6 @@ function updateUserProfile() {
                 }
             }));
         }
-        
-        addChatMessage('System', `${username} joined the game!`);
     }
 }
 
