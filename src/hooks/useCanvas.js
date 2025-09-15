@@ -26,7 +26,7 @@ export function useCanvas() {
       const canvasData = await response.json();
       
       // Clear canvas
-      if (ctx) {
+      if (ctx && canvas) {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         
         // Draw canvas data
@@ -52,7 +52,7 @@ export function useCanvas() {
   const clearCanvas = useCallback(async () => {
     try {
       await fetch(`${window.location.origin}/api/initCanvas`);
-      if (ctx) {
+      if (ctx && canvas) {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
       }
     } catch (error) {

@@ -44,13 +44,18 @@ export function useWebSocket(baseURL, currentUser) {
         setConnectionStatus('disconnected');
         console.log('WebSocket closed:', event.code, event.reason);
         
-        // Attempt to reconnect after 3 seconds
-        setTimeout(() => {
-          if (!ws || ws.readyState === WebSocket.CLOSED) {
-            console.log('Attempting to reconnect...');
-            connectWebSocket();
-          }
-        }, 3000);
+        // Only attempt to reconnect if it wasn't a manual close
+        if (event.code !== 1000) {
+          setTimeout(() => {
+            setWebsocket(prev => {
+              if (!prev || prev.readyState === WebSocket.CLOSED) {
+                console.log('Attempting to reconnect...');
+                connectWebSocket();
+              }
+              return prev;
+            });
+          }, 3000);
+        }
       };
       
       ws.onerror = (error) => {
@@ -64,7 +69,7 @@ export function useWebSocket(baseURL, currentUser) {
       setConnectionStatus('error');
       console.error('Connection error:', error);
     }
-  }, [baseURL, currentUser, websocket]);
+  }, [baseURL, currentUser.id, currentUser.username, currentUser.color]);
 
   return { websocket, connectionStatus, connectWebSocket };
 }

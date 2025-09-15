@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import './App.css';
 import UserPanel from './components/UserPanel';
 import ConnectionStatus from './components/ConnectionStatus';
 import UsersList from './components/UsersList';
 import Canvas from './components/Canvas';
 import Chat from './components/Chat';
+import ErrorBoundary from './components/ErrorBoundary';
 import { useWebSocket } from './hooks/useWebSocket';
 import { useCanvas } from './hooks/useCanvas';
 
@@ -23,26 +24,7 @@ function App() {
   const { canvas, ctx, initializeCanvas, loadCanvas, clearCanvas } = useCanvas();
 
   // Handle WebSocket messages
-  useEffect(() => {
-    if (websocket) {
-      const handleMessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          console.log('Received WebSocket message:', data);
-          handleWebSocketMessage(data);
-        } catch (e) {
-          console.log('Non-JSON message:', event.data);
-        }
-      };
-
-      websocket.addEventListener('message', handleMessage);
-      return () => {
-        websocket.removeEventListener('message', handleMessage);
-      };
-    }
-  }, [websocket]);
-
-  const handleWebSocketMessage = (data) => {
+  const handleWebSocketMessage = useCallback((data) => {
     if (data.x !== undefined && data.y !== undefined && data.color) {
       // Pixel update
       console.log('Handling pixel update:', data);
@@ -65,7 +47,26 @@ function App() {
     } else {
       console.log('Unknown message type:', data);
     }
-  };
+  }, [ctx, loadUsers, addMessage]);
+
+  useEffect(() => {
+    if (websocket) {
+      const handleMessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          console.log('Received WebSocket message:', data);
+          handleWebSocketMessage(data);
+        } catch (e) {
+          console.log('Non-JSON message:', event.data);
+        }
+      };
+
+      websocket.addEventListener('message', handleMessage);
+      return () => {
+        websocket.removeEventListener('message', handleMessage);
+      };
+    }
+  }, [websocket, handleWebSocketMessage]);
 
   // Initialize on component mount
   useEffect(() => {
@@ -91,7 +92,7 @@ function App() {
   };
 
   // Load users from backend
-  const loadUsers = async () => {
+  const loadUsers = useCallback(async () => {
     try {
       const response = await fetch(`${baseURL}/api/getUsers`);
       
@@ -114,7 +115,7 @@ function App() {
     } catch (error) {
       console.error('Error loading users:', error);
     }
-  };
+  }, [baseURL]);
 
   // Load messages from backend
   const loadMessages = async () => {
@@ -148,7 +149,7 @@ function App() {
   };
 
   // Add message to chat
-  const addMessage = (username, message, timestamp = new Date()) => {
+  const addMessage = useCallback((username, message, timestamp = new Date()) => {
     console.log(`addMessage called: ${username} - ${message}`);
     const newMessage = {
       id: Date.now() + Math.random(),
@@ -158,7 +159,7 @@ function App() {
     };
     setMessages(prev => [...prev, newMessage]);
     console.log(`Message added: ${username} - ${message}`);
-  };
+  }, []);
 
   // Send chat message
   const sendMessage = (message) => {
@@ -205,59 +206,61 @@ function App() {
   };
 
   return (
-    <div className="app">
-      <div className="header">
-        <h1>🎨 Pixel Collaboration Game</h1>
-        <p>Draw together in real-time with friends!</p>
-      </div>
-
-      <div className="main-container">
-        <div className="left-panel">
-          <div className="panel">
-            <h3>👤 Your Profile</h3>
-            <UserPanel 
-              currentUser={currentUser}
-              onUpdateProfile={updateUserProfile}
-            />
-          </div>
-
-          <div className="panel">
-            <h3>🔌 Connection</h3>
-            <ConnectionStatus 
-              status={connectionStatus}
-              onConnect={connectWebSocket}
-            />
-          </div>
-
-          <div className="panel">
-            <h3>👥 Online Users</h3>
-            <UsersList users={users} />
-          </div>
+    <ErrorBoundary>
+      <div className="app">
+        <div className="header">
+          <h1>🎨 Pixel Collaboration Game</h1>
+          <p>Draw together in real-time with friends!</p>
         </div>
 
-        <div className="right-panel">
-          <div className="panel">
-            <h3>🎨 Collaborative Canvas</h3>
-            <Canvas 
-              canvas={canvas}
-              ctx={ctx}
-              currentUser={currentUser}
-              websocket={websocket}
-              onClearCanvas={clearCanvas}
-              onRefreshCanvas={loadCanvas}
-            />
+        <div className="main-container">
+          <div className="left-panel">
+            <div className="panel">
+              <h3>👤 Your Profile</h3>
+              <UserPanel 
+                currentUser={currentUser}
+                onUpdateProfile={updateUserProfile}
+              />
+            </div>
+
+            <div className="panel">
+              <h3>🔌 Connection</h3>
+              <ConnectionStatus 
+                status={connectionStatus}
+                onConnect={connectWebSocket}
+              />
+            </div>
+
+            <div className="panel">
+              <h3>👥 Online Users</h3>
+              <UsersList users={users} />
+            </div>
           </div>
 
-          <div className="panel">
-            <h3>💬 Chat</h3>
-            <Chat 
-              messages={messages}
-              onSendMessage={sendMessage}
-            />
+          <div className="right-panel">
+            <div className="panel">
+              <h3>🎨 Collaborative Canvas</h3>
+              <Canvas 
+                canvas={canvas}
+                ctx={ctx}
+                currentUser={currentUser}
+                websocket={websocket}
+                onClearCanvas={clearCanvas}
+                onRefreshCanvas={loadCanvas}
+              />
+            </div>
+
+            <div className="panel">
+              <h3>💬 Chat</h3>
+              <Chat 
+                messages={messages}
+                onSendMessage={sendMessage}
+              />
+            </div>
           </div>
         </div>
       </div>
-    </div>
+    </ErrorBoundary>
   );
 }
 

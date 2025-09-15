@@ -1,14 +1,17 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 
 function Canvas({ canvas, ctx, currentUser, websocket, onClearCanvas, onRefreshCanvas }) {
   const [isDrawing, setIsDrawing] = useState(false);
+  const canvasRef = useRef(null);
 
   // Initialize canvas on mount
   useEffect(() => {
-    if (canvas && ctx) {
-      console.log('Canvas component initialized with canvas and context');
+    const canvasElement = document.getElementById('pixelCanvas');
+    if (canvasElement) {
+      canvasRef.current = canvasElement;
+      console.log('Canvas component initialized with canvas element');
     }
-  }, [canvas, ctx]);
+  }, []);
 
   const startDrawing = (e) => {
     setIsDrawing(true);
@@ -16,11 +19,11 @@ function Canvas({ canvas, ctx, currentUser, websocket, onClearCanvas, onRefreshC
   };
 
   const draw = (e) => {
-    if (!isDrawing || !ctx || !canvas) return;
+    if (!isDrawing || !ctx || !canvasRef.current) return;
     
-    const rect = canvas.getBoundingClientRect();
-    const scaleX = canvas.width / rect.width;
-    const scaleY = canvas.height / rect.height;
+    const rect = canvasRef.current.getBoundingClientRect();
+    const scaleX = canvasRef.current.width / rect.width;
+    const scaleY = canvasRef.current.height / rect.height;
     
     const x = Math.floor((e.clientX - rect.left) * scaleX);
     const y = Math.floor((e.clientY - rect.top) * scaleY);
