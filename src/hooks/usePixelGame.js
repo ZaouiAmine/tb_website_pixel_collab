@@ -141,6 +141,10 @@ export const usePixelGame = () => {
     setMessages(prev => [...prev, data])
   }, [])
 
+  // WebSocket connections
+  const { sendMessage: sendPixelUpdate } = useWebSocket(pixelChannelUrl, handlePixelBatchUpdate)
+  const { sendMessage: sendChatMessage } = useWebSocket(chatChannelUrl, handleChatMessage)
+
   // Send pixel batch
   const sendPixelBatch = useCallback(() => {
     if (pixelBatch.current.length > 0 && sendPixelUpdate) {
@@ -164,10 +168,6 @@ export const usePixelGame = () => {
       sendPixelBatch()
     }, BATCH_INTERVAL)
   }, [sendPixelBatch])
-
-  // WebSocket connections
-  const { sendMessage: sendPixelUpdate } = useWebSocket(pixelChannelUrl, handlePixelBatchUpdate)
-  const { sendMessage: sendChatMessage } = useWebSocket(chatChannelUrl, handleChatMessage)
 
   // Place a pixel
   const placePixel = useCallback((x, y, color, userId = 'user1', username = 'User') => {
