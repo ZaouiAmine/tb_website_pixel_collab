@@ -220,11 +220,14 @@ export const usePixelGame = () => {
 
   // Send a chat message
   const sendMessage = useCallback((message, userId = 'user1', username = 'User') => {
+    const messageId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
     const messageData = {
       message,
       userId,
       username,
-      room: ROOM
+      room: ROOM,
+      messageId: messageId,
+      timestamp: Date.now()
     }
     
     console.log('Sending chat message:', messageData)
