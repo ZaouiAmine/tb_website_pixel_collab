@@ -24,7 +24,7 @@ const Toolbar = ({ selectedColor, setSelectedColor }) => {
           
           {showColorPicker && (
             <div className="absolute top-14 left-1/2 transform -translate-x-1/2 bg-white/20 backdrop-blur-sm rounded-lg border border-white/30 p-3 z-10">
-              <div className="grid grid-cols-8 gap-1 mb-3">
+              <div className="grid grid-cols-5 gap-2 mb-3">
                 {predefinedColors.map((color) => (
                   <button
                     key={color}
@@ -32,7 +32,7 @@ const Toolbar = ({ selectedColor, setSelectedColor }) => {
                       setSelectedColor(color)
                       setShowColorPicker(false)
                     }}
-                    className={`w-5 h-5 rounded border transition-transform hover:scale-110 ${
+                    className={`w-6 h-6 rounded border transition-transform hover:scale-110 ${
                       selectedColor === color ? 'border-white' : 'border-white/30'
                     }`}
                     style={{ backgroundColor: color }}
