@@ -4,6 +4,7 @@ import { useWebSocket } from './useWebSocket'
 const API_BASE = `${window.location.origin}/api` // Use same origin as frontend
 const ROOM = 'main' // Default room
 const BATCH_INTERVAL = 2000 // 2 seconds in milliseconds
+const SOURCE_ID = `client_${Date.now()}_${Math.random().toString(36).substr(2, 9)}` // Unique client identifier
 
 export const usePixelGame = () => {
   const [pixels, setPixels] = useState({})
@@ -122,7 +123,13 @@ export const usePixelGame = () => {
   // Handle pixel batch updates from WebSocket
   const handlePixelBatchUpdate = useCallback((data) => {
     console.log('Received pixel batch update:', data)
-    const { pixels: batchPixels, batchId, timestamp } = data
+    const { pixels: batchPixels, batchId, timestamp, sourceId } = data
+    
+    // Ignore messages from this client (self-deduplication)
+    if (sourceId === SOURCE_ID) {
+      console.log('Ignoring pixel batch from self (sourceId:', sourceId, ')')
+      return
+    }
     
     // Prevent processing the same batch multiple times
     if (batchId && processedBatchIds.current.has(batchId)) {
@@ -158,6 +165,11 @@ export const usePixelGame = () => {
 
   // Handle chat messages from WebSocket
   const handleChatMessage = useCallback((data) => {
+    // Ignore messages from this client (self-deduplication)
+    if (data.sourceId === SOURCE_ID) {
+      console.log('Ignoring chat message from self (sourceId:', data.sourceId, ')')
+      return
+    }
     setMessages(prev => [...prev, data])
   }, [])
 
@@ -165,7 +177,7 @@ export const usePixelGame = () => {
   const { sendMessage: sendPixelUpdate, isConnected: pixelConnected, error: pixelError, reconnect: reconnectPixel } = useWebSocket(pixelChannelUrl, handlePixelBatchUpdate)
   const { sendMessage: sendChatMessage, isConnected: chatConnected, error: chatError, reconnect: reconnectChat } = useWebSocket(chatChannelUrl, handleChatMessage)
 
-  // Send pixel batch
+  // Send pixel batch directly to pub/sub for broadcasting
   const sendPixelBatch = useCallback(() => {
     if (pixelBatch.current.length > 0 && sendPixelUpdate) {
       const timestamp = Date.now()
@@ -173,9 +185,10 @@ export const usePixelGame = () => {
         pixels: [...pixelBatch.current],
         room: ROOM,
         timestamp: timestamp,
-        batchId: `${timestamp}-${Math.random().toString(36).substr(2, 9)}` // Unique batch ID
+        batchId: `${timestamp}-${Math.random().toString(36).substr(2, 9)}`, // Unique batch ID
+        sourceId: SOURCE_ID // Client identifier for self-deduplication
       }
-      console.log('Sending pixel batch:', batchData)
+      console.log('Sending pixel batch directly to pub/sub:', batchData)
       sendPixelUpdate(batchData)
       pixelBatch.current = [] // Clear the batch
     }
@@ -218,7 +231,7 @@ export const usePixelGame = () => {
     scheduleBatchSend()
   }, [scheduleBatchSend])
 
-  // Send a chat message
+  // Send a chat message directly to pub/sub for broadcasting
   const sendMessage = useCallback((message, userId = 'user1', username = 'User') => {
     const messageId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
     const messageData = {
@@ -227,7 +240,8 @@ export const usePixelGame = () => {
       username,
       room: ROOM,
       messageId: messageId,
-      timestamp: Date.now()
+      timestamp: Date.now(),
+      sourceId: SOURCE_ID // Client identifier for self-deduplication
     }
     
     console.log('Sending chat message:', messageData)
