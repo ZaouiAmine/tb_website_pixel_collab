@@ -23,7 +23,7 @@ function App() {
         <div className="max-w-7xl mx-auto px-4 py-4">
           <h1 className="text-2xl font-bold text-white flex items-center gap-2">
             <span className="text-3xl">🎨</span>
-            Pixel Collab Game
+            Pixel Collab Game v2
           </h1>
           <p className="text-gray-300 text-sm mt-1">Collaborate with others to create pixel art together</p>
         </div>
