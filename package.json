@@ -7,7 +7,9 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "serve": "vite preview --port 3000 --host",
+    "serve-dist": "npx serve dist -p 3000 -s"
   },
   "dependencies": {
     "react": "^19.1.1",
