@@ -33,15 +33,15 @@ function App() {
       <div className="max-w-7xl mx-auto p-4 h-[calc(100vh-80px)]">
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 h-full">
           {/* Canvas Area */}
-          <div className="lg:col-span-3 flex flex-col">
-            <div className="bg-white/10 backdrop-blur-sm rounded-lg border border-white/20 p-4 flex-1 flex flex-col">
+          <div className="lg:col-span-3 flex flex-col order-2 lg:order-1">
+            <div className="bg-white/10 backdrop-blur-sm rounded-lg border border-white/20 p-4 flex-1 flex flex-col min-h-0">
               <div className="mb-4">
                 <Toolbar 
                   selectedColor={selectedColor}
                   setSelectedColor={setSelectedColor}
                 />
               </div>
-              <div className="flex-1 bg-white rounded-lg shadow-inner overflow-hidden">
+              <div className="flex-1 bg-white rounded-lg shadow-inner overflow-hidden min-h-0">
                 <PixelCanvas 
                   selectedColor={selectedColor}
                   pixels={pixels}
@@ -52,8 +52,8 @@ function App() {
           </div>
 
           {/* Chat Area */}
-          <div className="lg:col-span-1">
-            <div className="bg-white/10 backdrop-blur-sm rounded-lg border border-white/20 h-full">
+          <div className="lg:col-span-1 flex flex-col order-1 lg:order-2 min-h-0">
+            <div className="bg-white/10 backdrop-blur-sm rounded-lg border border-white/20 h-full min-h-[400px] lg:min-h-0 flex flex-col">
               <Chat 
                 messages={messages}
                 onSendMessage={sendMessage}
