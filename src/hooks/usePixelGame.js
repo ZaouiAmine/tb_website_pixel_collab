@@ -15,6 +15,7 @@ export const usePixelGame = () => {
   // Pixel batching
   const pixelBatch = useRef([])
   const batchTimeoutRef = useRef(null)
+  const processedBatchIds = useRef(new Set())
 
   // Load initial canvas data
   const loadCanvas = useCallback(async () => {
@@ -121,7 +122,13 @@ export const usePixelGame = () => {
   // Handle pixel batch updates from WebSocket
   const handlePixelBatchUpdate = useCallback((data) => {
     console.log('Received pixel batch update:', data)
-    const { pixels: batchPixels } = data
+    const { pixels: batchPixels, batchId, timestamp } = data
+    
+    // Prevent processing the same batch multiple times
+    if (batchId && processedBatchIds.current.has(batchId)) {
+      console.log('Ignoring duplicate batch with ID:', batchId)
+      return
+    }
     
     if (Array.isArray(batchPixels)) {
       setPixels(prev => {
@@ -133,6 +140,19 @@ export const usePixelGame = () => {
         console.log('Updated pixels from batch:', newPixels)
         return newPixels
       })
+      
+      // Mark this batch as processed
+      if (batchId) {
+        processedBatchIds.current.add(batchId)
+        
+        // Clean up old batch IDs to prevent memory leaks (keep only last 100)
+        if (processedBatchIds.current.size > 100) {
+          const idsArray = Array.from(processedBatchIds.current)
+          processedBatchIds.current.clear()
+          // Keep the most recent 50 batch IDs
+          idsArray.slice(-50).forEach(id => processedBatchIds.current.add(id))
+        }
+      }
     }
   }, [])
 
@@ -148,10 +168,12 @@ export const usePixelGame = () => {
   // Send pixel batch
   const sendPixelBatch = useCallback(() => {
     if (pixelBatch.current.length > 0 && sendPixelUpdate) {
+      const timestamp = Date.now()
       const batchData = {
         pixels: [...pixelBatch.current],
         room: ROOM,
-        timestamp: Date.now()
+        timestamp: timestamp,
+        batchId: `${timestamp}-${Math.random().toString(36).substr(2, 9)}` // Unique batch ID
       }
       console.log('Sending pixel batch:', batchData)
       sendPixelUpdate(batchData)
