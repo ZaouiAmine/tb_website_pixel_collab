@@ -3,7 +3,7 @@ import { useWebSocket } from './useWebSocket'
 
 const API_BASE = `${window.location.origin}/api` // Use same origin as frontend
 const ROOM = 'main' // Default room
-const BATCH_INTERVAL = 100 // 2 seconds in milliseconds
+const BATCH_INTERVAL = 2000 // 2 seconds in milliseconds
 
 export const usePixelGame = () => {
   const [pixels, setPixels] = useState({})
