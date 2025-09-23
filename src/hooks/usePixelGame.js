@@ -65,8 +65,8 @@ export const usePixelGame = () => {
   const getWebSocketUrls = useCallback(async () => {
     try {
       const [pixelResponse, chatResponse] = await Promise.all([
-        fetch(`${API_BASE}/getPixelChannelURL?room=${ROOM}`),
-        fetch(`${API_BASE}/getChatChannelURL?room=${ROOM}`)
+        fetch(`${API_BASE}/getChannelURL?channel=pixelupdates&room=${ROOM}`),
+        fetch(`${API_BASE}/getChannelURL?channel=chatmessages&room=${ROOM}`)
       ])
 
       if (pixelResponse.ok && chatResponse.ok) {
@@ -170,7 +170,11 @@ export const usePixelGame = () => {
       console.log('Ignoring chat message from self (sourceId:', data.sourceId, ')')
       return
     }
-    setMessages(prev => [...prev, data])
+    setMessages(prev => {
+      const newMessages = [...prev, data]
+      // Keep only last 100 messages (frontend limit)
+      return newMessages.length > 100 ? newMessages.slice(-100) : newMessages
+    })
   }, [])
 
   // WebSocket connections
@@ -234,13 +238,14 @@ export const usePixelGame = () => {
   // Send a chat message directly to pub/sub for broadcasting
   const sendMessage = useCallback((message, userId = 'user1', username = 'User') => {
     const messageId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+    const timestamp = Math.floor(Date.now() / 1000)
     const messageData = {
-      message,
+      messageId: messageId,
       userId,
       username,
+      message,
+      timestamp: timestamp,
       room: ROOM,
-      messageId: messageId,
-      timestamp: Date.now(),
       sourceId: SOURCE_ID // Client identifier for self-deduplication
     }
     
@@ -248,11 +253,11 @@ export const usePixelGame = () => {
     
     // Optimistic update - add message immediately to frontend
     const chatMessage = {
-      id: Date.now().toString(),
+      id: messageId,
       userId,
       username,
       message,
-      timestamp: Math.floor(Date.now() / 1000)
+      timestamp: timestamp
     }
     setMessages(prev => [...prev, chatMessage])
     
@@ -260,11 +265,42 @@ export const usePixelGame = () => {
     sendChatMessage(messageData)
   }, [sendChatMessage])
 
+  // Clear functions
+  const clearCanvas = useCallback(async () => {
+    try {
+      const response = await fetch(`${API_BASE}/clearData?type=canvas&room=${ROOM}`)
+      if (response.ok) {
+        setPixels({})
+        console.log('Canvas cleared successfully')
+      } else {
+        console.error('Failed to clear canvas:', response.status)
+      }
+    } catch (error) {
+      console.error('Error clearing canvas:', error)
+    }
+  }, [])
+
+  const clearChat = useCallback(async () => {
+    try {
+      const response = await fetch(`${API_BASE}/clearData?type=chat&room=${ROOM}`)
+      if (response.ok) {
+        setMessages([])
+        console.log('Chat cleared successfully')
+      } else {
+        console.error('Failed to clear chat:', response.status)
+      }
+    } catch (error) {
+      console.error('Error clearing chat:', error)
+    }
+  }, [])
+
   return {
     pixels,
     messages,
     placePixel,
     sendMessage,
+    clearCanvas,
+    clearChat,
     isLoading,
     room: ROOM,
     // WebSocket connection status

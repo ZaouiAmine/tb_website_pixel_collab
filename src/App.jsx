@@ -6,7 +6,7 @@ import { usePixelGame } from './hooks/usePixelGame'
 
 function App() {
   const [selectedColor, setSelectedColor] = useState('#000000')
-  const { pixels, messages, placePixel, sendMessage, isLoading } = usePixelGame()
+  const { pixels, messages, placePixel, sendMessage, clearCanvas, clearChat, isLoading } = usePixelGame()
 
   if (isLoading) {
     return (
@@ -35,11 +35,27 @@ function App() {
           {/* Canvas Area */}
           <div className="lg:col-span-3 flex flex-col order-1 lg:order-1">
             <div className="bg-white/10 backdrop-blur-sm rounded-lg border border-white/20 p-4 flex-1 flex flex-col min-h-0 max-h-[55vh] lg:max-h-none">
-              <div className="mb-4">
+              <div className="mb-4 flex gap-4">
                 <Toolbar 
                   selectedColor={selectedColor}
                   setSelectedColor={setSelectedColor}
                 />
+                <div className="flex gap-2">
+                  <button
+                    onClick={clearCanvas}
+                    className="bg-red-500/20 hover:bg-red-500/30 text-red-200 hover:text-red-100 px-3 py-2 rounded-lg border border-red-400/30 hover:border-red-400/50 transition-all duration-200 text-sm font-medium"
+                    title="Clear Canvas"
+                  >
+                    🗑️ Clear Canvas
+                  </button>
+                  <button
+                    onClick={clearChat}
+                    className="bg-orange-500/20 hover:bg-orange-500/30 text-orange-200 hover:text-orange-100 px-3 py-2 rounded-lg border border-orange-400/30 hover:border-orange-400/50 transition-all duration-200 text-sm font-medium"
+                    title="Clear Chat"
+                  >
+                    💬 Clear Chat
+                  </button>
+                </div>
               </div>
               <div className="flex-1 bg-white rounded-lg shadow-inner overflow-hidden min-h-0">
                 <PixelCanvas 
