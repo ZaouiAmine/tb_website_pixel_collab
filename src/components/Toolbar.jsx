@@ -10,12 +10,12 @@ const Toolbar = ({ selectedColor, setSelectedColor }) => {
     <div className="bg-white/10 backdrop-blur-sm rounded-lg border border-white/20 p-4">
       <div className="flex flex-col items-center space-y-3">
         <h3 className="text-white/90 text-sm font-medium">Choose Color</h3>
-        <div className="grid grid-cols-5 gap-2">
+        <div className="flex gap-2 overflow-x-auto w-full max-w-md scrollbar-thin scrollbar-thumb-white/30 scrollbar-track-transparent">
           {colors.map((color) => (
             <button
               key={color}
               onClick={() => setSelectedColor(color)}
-              className={`w-8 h-8 rounded-lg border-2 transition-all duration-200 hover:scale-110 hover:shadow-lg ${
+              className={`w-8 h-8 rounded-lg border-2 transition-all duration-200 hover:scale-110 hover:shadow-lg flex-shrink-0 ${
                 selectedColor === color 
                   ? 'border-white shadow-lg scale-105' 
                   : 'border-white/30 hover:border-white/50'
